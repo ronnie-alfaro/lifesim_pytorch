@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LifeSim — Laboratorio neuronal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">LIFESIM v0.1</p>
+      <h1>Laboratorio neuronal</h1>
+    </div>
+    <div class="run-identity">
+      <span id="connection-dot" class="connection-dot"></span>
+      <span id="run-label">Conectando…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="control-deck panel">
+      <div class="transport">
+        <button id="play-button" class="button primary">▶ Iniciar</button>
+        <button id="pause-button" class="button">Ⅱ Pausar</button>
+        <button id="step-button" class="button">→ Un tick</button>
+        <button id="next-run-button" class="button next-cycle" disabled>↻ Siguiente ciclo</button>
+      </div>
+      <div class="timeline">
+        <div class="timeline-labels">
+          <strong id="tick-label">Tick 0 / 0</strong>
+          <span id="status-label" class="status-badge">PAUSADO</span>
+        </div>
+        <div class="progress-track"><div id="tick-progress" class="progress-fill"></div></div>
+      </div>
+      <label class="speed-control">
+        <span>Velocidad</span>
+        <input id="speed-input" type="range" min="1" max="30" value="4">
+        <output id="speed-label">4 ticks/s</output>
+      </label>
+    </section>
+
+    <section class="experiment-builder panel">
+      <div class="builder-heading">
+        <div>
+          <p class="eyebrow">NUEVO EXPERIMENTO</p>
+          <h2>Población y capacidad del brain</h2>
+        </div>
+        <button id="apply-config-button" class="button primary">Crear experimento</button>
+      </div>
+      <div class="builder-controls">
+        <label class="builder-control">
+          <span>Humanos <output id="human-count-label">5</output></span>
+          <input id="human-count-input" type="range" min="1" max="30" step="1" value="5">
+        </label>
+        <label class="builder-control">
+          <span>Animales <output id="animal-count-label">10</output></span>
+          <input id="animal-count-input" type="range" min="1" max="50" step="1" value="10">
+        </label>
+        <label class="builder-control">
+          <span>Brain humano <output id="human-brain-label">32</output></span>
+          <input id="human-brain-input" type="range" min="8" max="64" step="8" value="32">
+        </label>
+        <label class="builder-control">
+          <span>Brain animal <output id="animal-brain-label">24</output></span>
+          <input id="animal-brain-input" type="range" min="8" max="64" step="8" value="24">
+        </label>
+      </div>
+      <div class="builder-footer">
+        <span id="architecture-preview">Brain v2: necesidades + memoria espacial → fusión → acciones</span>
+        <span id="builder-help">Configurable antes del primer tick o al terminar el run. Más agentes y neuronas requieren más CPU.</span>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <div class="world-column">
+        <article class="panel world-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">MUNDO</p>
+              <h2>Cuadrícula viva</h2>
+            </div>
+            <div class="legend">
+              <span><i class="legend-human"></i>Humano</span>
+              <span><i class="legend-animal"></i>Animal</span>
+              <span><i class="legend-food"></i>Comida</span>
+              <span><i class="legend-water"></i>Agua</span>
+            </div>
+          </div>
+          <canvas id="world" class="world" width="720" height="480" aria-label="Matriz del mundo LifeSim"></canvas>
+          <p class="world-hint">Humano: figura vertical naranja · Animal: figura horizontal verde. Selecciona uno para inspeccionar su brain.</p>
+        </article>
+
+        <div class="metric-grid">
+          <article class="metric-card"><span>Humanos vivos</span><strong id="humans-alive">—</strong></article>
+          <article class="metric-card"><span>Animales vivos</span><strong id="animals-alive">—</strong></article>
+          <article class="metric-card"><span>Comida / agua</span><strong id="resources-count">—</strong></article>
+          <article class="metric-card"><span>Loss promedio</span><strong id="average-loss">—</strong></article>
+        </div>
+
+        <article class="panel learning-flow">
+          <div class="panel-heading">
+            <div><p class="eyebrow">LOOP REAL</p><h2>Del mundo a los pesos</h2></div>
+          </div>
+          <div class="flow" id="learning-flow">
+            <span>Mundo</span><b>→</b><span>Percepción</span><b>→</b><span>Brain</span><b>→</b>
+            <span>Acción</span><b>→</b><span>Reward</span><b>→</b><span>Horde replay</span><b>→</b><span>Backward individual</span>
+          </div>
+          <p id="training-message">Horde reúne las experiencias del grupo por especie para entrenar cada brain individual.</p>
+          <div id="completion-summary" class="completion-summary" hidden>
+            <div class="summary-title">
+              <div><p class="eyebrow">RUN TERMINADO</p><h3>Resumen del aprendizaje</h3></div>
+              <strong id="termination-label">—</strong>
+            </div>
+            <p id="survivor-summary" class="survivor-summary"></p>
+            <p id="run-comparison" class="run-comparison" hidden></p>
+            <div id="comparison-chart-wrap" class="comparison-chart-wrap" hidden>
+              <canvas id="comparison-chart" width="720" height="260" aria-label="Comparación con el run anterior"></canvas>
+            </div>
+            <div class="summary-table-wrap">
+              <table class="summary-table">
+                <thead><tr><th>Agentes</th><th>Reward 20% inicial</th><th>Reward 20% final</th><th>Loss inicial</th><th>Loss final</th><th>Bebidas</th></tr></thead>
+                <tbody id="learning-numbers"></tbody>
+              </table>
+            </div>
+            <h3 class="learned-heading">¿Qué aprendieron?</h3>
+            <ul id="learned-explanation" class="learned-explanation"></ul>
+          </div>
+        </article>
+      </div>
+
+      <aside class="inspector-column">
+        <article class="panel inspector">
+          <div class="agent-title">
+            <div>
+              <p class="eyebrow">AGENTE SELECCIONADO</p>
+              <h2 id="agent-name">Ninguno</h2>
+            </div>
+            <span id="agent-kind" class="agent-kind">—</span>
+          </div>
+
+          <div class="scope-switch" role="group" aria-label="Alcance de estadísticas">
+            <button id="all-humans-button" class="scope-button active">Todos los humanos</button>
+            <button id="all-animals-button" class="scope-button">Todos los animales</button>
+          </div>
+
+          <div id="agent-empty" class="empty-state">No hay agentes en esta vista.</div>
+          <div id="agent-details" hidden>
+            <div class="vitals" id="vitals"></div>
+            <div class="decision-card">
+              <div><span>Acción</span><strong id="agent-action">—</strong></div>
+              <div><span>Reward</span><strong id="agent-reward">—</strong></div>
+              <div><span>Loss</span><strong id="agent-loss">—</strong></div>
+            </div>
+            <div class="training-facts">
+              <span id="agent-mode">—</span>
+              <span id="agent-replay">Replay 0</span>
+              <span id="agent-updates">0 updates</span>
+            </div>
+            <p id="epsilon-explanation" class="epsilon-explanation"></p>
+
+            <section class="brain-section neural-lab">
+              <div class="section-label"><h3>Brain v2 en vivo</h3><span>activaciones, decisión y pesos</span></div>
+              <canvas id="brain-network" width="620" height="330" aria-label="Diagrama de activaciones del brain"></canvas>
+              <p id="brain-network-caption" class="brain-caption"></p>
+            </section>
+
+            <section class="brain-section">
+              <div class="section-label"><h3>Memoria espacial</h3><span>último recurso visto, no omnisciencia</span></div>
+              <div id="spatial-memory" class="memory-grid"></div>
+            </section>
+
+            <section class="brain-section">
+              <div class="section-label"><h3>Q-values</h3><span>salida del forward</span></div>
+              <div id="q-values" class="bar-list"></div>
+            </section>
+            <section class="brain-section">
+              <div class="section-label"><h3>Percepción</h3><span>tensor de entrada</span></div>
+              <div id="observations" class="observation-grid"></div>
+            </section>
+            <section class="brain-section">
+              <div class="section-label"><h3>Reward</h3><span>componentes del tick</span></div>
+              <div id="reward-components" class="component-list"></div>
+            </section>
+          </div>
+        </article>
+
+        <article class="panel event-panel">
+          <div class="panel-heading"><div><p class="eyebrow">ACTIVIDAD</p><h2>Últimas decisiones</h2></div></div>
+          <div id="event-stream" class="event-stream"></div>
+        </article>
+      </aside>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
