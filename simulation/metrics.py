@@ -46,6 +46,13 @@ class MetricsRecorder:
                     "ate": "ate_while_hungry" in components,
                     "drank": "drank_while_thirsty" in components,
                     "resource_progress": components.get("resource_progress", 0.0),
+                    "survival_priority_penalty": -components.get(
+                        "ignored_survival_priority", 0.0
+                    ),
+                    "need_safety_signal": components.get(
+                        "returned_to_safe_need_zone",
+                        components.get("unsafe_need_level", 0.0),
+                    ),
                     "exploration": event.get("exploration"),
                     "epsilon": event.get("epsilon"),
                     "exploration_profile": agent.exploration_profile,
@@ -55,6 +62,10 @@ class MetricsRecorder:
                     "training_steps": event.get(
                         "training_steps", agent.trainer.training_steps
                     ),
+                    "brain_preferred_action": event.get("brain_preferred_action"),
+                    "governor_override": event.get("governor_override", False),
+                    "governor_mode": event.get("governor_mode", "valid_actions"),
+                    "survival_priority": event.get("survival_priority"),
                     "x": agent.x,
                     "y": agent.y,
                 }

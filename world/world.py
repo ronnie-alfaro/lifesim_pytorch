@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -27,6 +28,14 @@ class ActionResult:
     unnecessary_need_action: bool = False
 
 
+@dataclass(frozen=True)
+class ActionConstraints:
+    mask: list[bool]
+    mode: str
+    priority: str | None = None
+    target: tuple[int, int] | None = None
+
+
 class World:
     def __init__(self, config: SimulationConfig, populate: bool = True) -> None:
         self.config = config
@@ -38,6 +47,9 @@ class World:
         self.water: set[tuple[int, int]] = set()
         self.obstacles: set[tuple[int, int]] = set()
         self.agents: list[BaseAgent] = []
+        self._distance_map_cache: dict[
+            tuple[int, int], dict[tuple[int, int], int]
+        ] = {}
         if populate:
             self._populate()
 
@@ -91,7 +103,7 @@ class World:
             return
         seeds = min(count, max(1, cluster_count))
         for _ in range(seeds):
-            resource.add(self._empty_position(False))
+            resource.add(self._spread_resource_seed(resource))
         failed_growth_attempts = 0
         while len(resource) < count:
             if self._grow_resource_cluster(resource):
@@ -101,6 +113,44 @@ class World:
             if failed_growth_attempts >= 4:
                 resource.add(self._empty_position(False))
                 failed_growth_attempts = 0
+
+    def _spread_resource_seed(
+        self, resource: set[tuple[int, int]]
+    ) -> tuple[int, int]:
+        """Place cluster centers far apart so the grid has no resource deserts."""
+        occupied = self.food | self.water | self.obstacles
+        candidates = [
+            (x, y)
+            for y in range(self.height)
+            for x in range(self.width)
+            if (x, y) not in occupied
+        ]
+        if resource is self.water and self.food:
+            habitat_candidates = [
+                position
+                for position in candidates
+                if min(
+                    self.manhattan_distance(position, food)
+                    for food in self.food
+                )
+                <= 3
+            ]
+            if habitat_candidates:
+                candidates = habitat_candidates
+        if not candidates:
+            raise RuntimeError("World has no free position for a resource cluster")
+        if not resource:
+            return random.choice(candidates)
+        distances = {
+            position: min(
+                self.manhattan_distance(position, seed) for seed in resource
+            )
+            for position in candidates
+        }
+        maximum = max(distances.values())
+        return random.choice([
+            position for position, distance in distances.items() if distance == maximum
+        ])
 
     def _grow_resource_cluster(self, resource: set[tuple[int, int]]) -> bool:
         """Add one cardinal neighbour, returning False only if no edge is free."""
@@ -140,8 +190,12 @@ class World:
             if not self.in_bounds(*new_position) or new_position in self.obstacles:
                 return ActionResult(action, invalid=True)
             agent.x, agent.y = new_position
-            needed = (new_position in self.food and agent.hunger >= 0.5) or (
-                new_position in self.water and agent.thirst >= 0.5
+            needed = (
+                new_position in self.food
+                and agent.hunger >= self.config.priority_need_threshold
+            ) or (
+                new_position in self.water
+                and agent.thirst >= self.config.priority_need_threshold
             )
             return ActionResult(action, reached_needed_resource=needed)
         if action is Action.EAT:
@@ -185,6 +239,148 @@ class World:
                 unnecessary_need_action=not necessary,
             )
         return ActionResult(action)
+
+    def action_constraints(self, agent: BaseAgent) -> ActionConstraints:
+        """Return valid actions, narrowed by the survival governor when urgent."""
+        mask = [False for _ in Action]
+        for action, (dx, dy) in MOVEMENT_DELTAS.items():
+            destination = (agent.x + dx, agent.y + dy)
+            mask[action] = self.in_bounds(*destination) and destination not in self.obstacles
+        mask[Action.EAT] = self.resource_in_reach(agent, "food")
+        mask[Action.DRINK] = self.resource_in_reach(agent, "water")
+        mask[Action.REST] = True
+        mask[Action.WAIT] = True
+
+        needs = {
+            "food": agent.hunger,
+            "water": agent.thirst,
+            "rest": 1.0 - agent.energy,
+        }
+        memories = {
+            "food": agent.spatial_memory.food.position,
+            "water": agent.spatial_memory.water.position,
+        }
+        physical_movement_mask = mask.copy()
+        for action, (dx, dy) in MOVEMENT_DELTAS.items():
+            if not mask[action]:
+                continue
+            destination = (agent.x + dx, agent.y + dy)
+            for name, need, rate in (
+                ("food", agent.hunger, self.config.hunger_per_tick),
+                ("water", agent.thirst, self.config.thirst_per_tick),
+            ):
+                target = memories[name]
+                if target is None:
+                    continue
+                distance = self._distance_map(target).get(destination)
+                travel_ticks = max(0, distance - 1) if distance is not None else 10_000
+                available_ticks = (
+                    (self.config.need_danger_threshold - need) / max(1e-9, rate)
+                    - self.config.survival_travel_reserve_ticks
+                )
+                if travel_ticks > available_ticks:
+                    mask[action] = False
+                    break
+        if not any(mask[action] for action in MOVEMENT_DELTAS):
+            # If the current state is already outside the viability envelope,
+            # movement toward the selected priority remains better than paralysis.
+            for action in MOVEMENT_DELTAS:
+                mask[action] = physical_movement_mask[action]
+        travel_by_need: dict[str, int] = {"rest": 0}
+        for name, need in needs.items():
+            if name != "rest":
+                target = memories[name]
+                distance = (
+                    self._distance_map(target).get((agent.x, agent.y))
+                    if target is not None
+                    else None
+                )
+                travel_by_need[name] = distance if distance is not None else 10_000
+        urgency = max(needs.values())
+        if urgency < self.config.priority_need_threshold:
+            return ActionConstraints(mask, "valid_actions")
+        # When needs are nearly tied, finish the nearest one first. Distance
+        # then decreases every tick, which naturally prevents route ping-pong.
+        candidates = [
+            name for name, need in needs.items() if urgency - need <= 0.02
+        ]
+        priority = min(candidates, key=lambda name: travel_by_need[name])
+
+        if priority == "rest":
+            return ActionConstraints(
+                _only_actions(Action.REST), "survival", priority="rest"
+            )
+
+        consume_action = Action.EAT if priority == "food" else Action.DRINK
+        if mask[consume_action]:
+            return ActionConstraints(
+                _only_actions(consume_action), "survival", priority=priority
+            )
+
+        memory = getattr(agent.spatial_memory, priority)
+        target = memory.position
+        if target is not None:
+            route_actions = [
+                action
+                for action in self._shortest_route_actions((agent.x, agent.y), target)
+                if mask[action]
+            ]
+            if route_actions:
+                return ActionConstraints(
+                    _only_actions(*route_actions),
+                    "survival",
+                    priority=priority,
+                    target=target,
+                )
+
+        search_actions = [
+            action for action in MOVEMENT_DELTAS if mask[action]
+        ]
+        if search_actions:
+            return ActionConstraints(
+                _only_actions(*search_actions), "search", priority=priority
+            )
+        # A fully enclosed agent must retain one valid action.
+        return ActionConstraints(
+            _only_actions(Action.WAIT), "trapped", priority=priority
+        )
+
+    def _shortest_route_actions(
+        self, start: tuple[int, int], target: tuple[int, int]
+    ) -> list[Action]:
+        """Return every first move belonging to a shortest obstacle-safe path."""
+        distances = self._distance_map(target)
+        candidates: list[tuple[int, Action]] = []
+        for action, (dx, dy) in MOVEMENT_DELTAS.items():
+            destination = (start[0] + dx, start[1] + dy)
+            if destination in distances:
+                candidates.append((distances[destination], action))
+        if not candidates:
+            return []
+        best = min(distance for distance, _ in candidates)
+        return [action for distance, action in candidates if distance == best]
+
+    def _distance_map(
+        self, target: tuple[int, int]
+    ) -> dict[tuple[int, int], int]:
+        cached = self._distance_map_cache.get(target)
+        if cached is not None:
+            return cached
+        distances = {target: 0}
+        queue = deque([target])
+        while queue:
+            x, y = queue.popleft()
+            for dx, dy in MOVEMENT_DELTAS.values():
+                neighbour = (x + dx, y + dy)
+                if (
+                    self.in_bounds(*neighbour)
+                    and neighbour not in self.obstacles
+                    and neighbour not in distances
+                ):
+                    distances[neighbour] = distances[(x, y)] + 1
+                    queue.append(neighbour)
+        self._distance_map_cache[target] = distances
+        return distances
 
     def resource_position_in_reach(
         self, agent: BaseAgent, resource: Literal["food", "water"]
@@ -273,3 +469,8 @@ class World:
                 raise RuntimeError(f"Agent {agent.id} escaped the grid at {(agent.x, agent.y)}")
         if self.obstacles & self.food or self.obstacles & self.water:
             raise RuntimeError("A resource overlaps an obstacle")
+
+
+def _only_actions(*actions: Action) -> list[bool]:
+    allowed = set(actions)
+    return [action in allowed for action in Action]

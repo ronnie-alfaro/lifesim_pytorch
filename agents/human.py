@@ -6,12 +6,15 @@ from agents.base_agent import BaseAgent
 
 
 class Human(BaseAgent):
-    """Brain v2 perception: eight needs followed by eighteen spatial inputs."""
+    """Brain v2 perception: survival signals followed by spatial memory."""
 
     NEED_LABELS = [
         "hambre", "sed", "falta energía", "falta salud",
         "prioridad comida", "prioridad agua", "prioridad descanso",
         "prioridad salud",
+        "riesgo hambre", "riesgo sed", "riesgo agotamiento",
+        "recibiendo daño", "daño reciente", "margen de vida",
+        "urgencia vital",
     ]
     SPATIAL_LABELS = [
         "mem comida dx", "mem comida dy", "conf comida", "edad comida",
@@ -25,19 +28,7 @@ class Human(BaseAgent):
 
     def perceive(self, world: "World") -> torch.Tensor:
         self.spatial_memory.observe(self, world)
-        energy_need = 1.0 - self.energy
-        health_need = 1.0 - self.health
-        threshold = self.config.priority_need_threshold
-        needs = [
-            self.hunger,
-            self.thirst,
-            energy_need,
-            health_need,
-            float(self.hunger >= threshold),
-            float(self.thirst >= threshold),
-            float(energy_need >= threshold),
-            float(health_need >= threshold),
-        ]
+        needs = self.need_observation()
         spatial = [
             *self.spatial_memory.features("food", self, world),
             *self.spatial_memory.features("water", self, world),

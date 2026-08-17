@@ -27,8 +27,17 @@ class SpatialMemory:
         for resource in ("food", "water"):
             memory = self.food if resource == "food" else self.water
             visible = world.visible_resources(
-                agent.x, agent.y, resource, agent.config.vision_radius
+                agent.x, agent.y, resource, agent.config.resource_sense_radius
             )
+            need = agent.hunger if resource == "food" else agent.thirst
+            if (
+                memory.position in visible
+                and need >= agent.config.priority_need_threshold
+            ):
+                # Commit to a living target instead of chasing whichever cell
+                # becomes one step nearer while this need is a priority.
+                memory.last_seen_age = agent.age
+                continue
             if visible:
                 memory.position = min(
                     visible,
@@ -39,7 +48,7 @@ class SpatialMemory:
             elif (
                 memory.position is not None
                 and world.manhattan_distance((agent.x, agent.y), memory.position)
-                <= agent.config.vision_radius
+                <= agent.config.resource_sense_radius
             ):
                 # The remembered food was consumed or changed before arrival.
                 memory.position = None

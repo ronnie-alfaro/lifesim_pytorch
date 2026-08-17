@@ -12,7 +12,11 @@ from agents.animal import Animal
 from agents.human import Human
 from config import SimulationConfig
 from learning.replay_buffer import ReplayBuffer
-from learning.rewards import calculate_reward
+from learning.rewards import (
+    calculate_need_safety_signal,
+    calculate_reward,
+    calculate_survival_priority_penalty,
+)
 from persistence.checkpoints import (
     load_horde_replay_state,
     model_hash,
@@ -40,6 +44,8 @@ class SimulationEngine:
         source_checkpoint: Path | None = None,
         architecture_migrations: list[str] | None = None,
         learning_state_resets: list[str] | None = None,
+        brb_source: str | None = None,
+        brb_parents: dict[str, str] | None = None,
     ) -> None:
         self.world = world
         self.config = config
@@ -50,6 +56,9 @@ class SimulationEngine:
         self.source_checkpoint = source_checkpoint
         self.architecture_migrations = architecture_migrations or []
         self.learning_state_resets = learning_state_resets or []
+        self.brb_source = brb_source
+        self.brb_parents = brb_parents or {}
+        self.brb_promoted = False
         self.metrics = MetricsRecorder()
         self.renderer = AsciiRenderer()
         self.current_tick = 0
@@ -81,24 +90,29 @@ class SimulationEngine:
         tick_actions: dict[str, str] = {}
         tick_components: dict[str, dict[str, float]] = {}
         events: dict[str, dict[str, object]] = {}
+        learning_agents = []
         for agent in list(self.world.living_agents):
             # WORLD -> PERCEPTION -> BRAIN/ACTION
             state = agent.perceive(self.world)
-            urgent_resource: str | None = None
-            if agent.thirst >= 0.25 or agent.hunger >= 0.25:
-                urgent_resource = "water" if agent.thirst >= agent.hunger else "food"
+            hunger_before = agent.hunger
+            thirst_before = agent.thirst
+            constraints = self.world.action_constraints(agent)
+            remembered_target = constraints.target
             distance_before = (
-                self.world.distance_to_nearest(agent.x, agent.y, urgent_resource)
-                if urgent_resource is not None
+                self.world.manhattan_distance((agent.x, agent.y), remembered_target)
+                if remembered_target is not None
                 else None
             )
             action_index = agent.choose_action(
-                state, (self.run_number - 1) * self.config.num_ticks + tick
+                state,
+                (self.run_number - 1) * self.config.num_ticks + tick,
+                constraints.mask,
             )
+            action_name = Action(action_index).name
             action_result = self.world.execute_action(agent, action_index)
             distance_after = (
-                self.world.distance_to_nearest(agent.x, agent.y, urgent_resource)
-                if urgent_resource is not None
+                self.world.manhattan_distance((agent.x, agent.y), remembered_target)
+                if remembered_target is not None
                 else None
             )
             resource_progress = 0.0
@@ -113,12 +127,37 @@ class SimulationEngine:
                 and distance_before is not None
                 and distance_after is not None
             ):
+                urgency = max(hunger_before, thirst_before)
                 if distance_after < distance_before:
-                    resource_progress = 0.05
+                    resource_progress = 0.05 + 0.10 * urgency
                 elif distance_after > distance_before:
-                    resource_progress = -0.03
+                    resource_progress = -(0.03 + 0.12 * urgency)
+            survival_priority_penalty = calculate_survival_priority_penalty(
+                action_name=action_name,
+                hunger=hunger_before,
+                thirst=thirst_before,
+                energy=agent.energy,
+                health=agent.health,
+                threshold=self.config.survival_priority_threshold,
+                base=self.config.survival_priority_penalty_base,
+                scale=self.config.survival_priority_penalty_scale,
+                cap=self.config.survival_priority_penalty_cap,
+                movement_has_known_target=distance_before is not None,
+                resource_progress=resource_progress,
+            )
             agent.note_position()
             health_delta, died = agent.update_biology(rested=action_result.rested)
+            need_safety_signal = calculate_need_safety_signal(
+                hunger_before=hunger_before,
+                thirst_before=thirst_before,
+                hunger_after=agent.hunger,
+                thirst_after=agent.thirst,
+                safe_target=self.config.need_safe_target,
+                danger_threshold=self.config.need_danger_threshold,
+                penalty_at_danger=self.config.need_penalty_at_danger,
+                penalty_cap=self.config.need_penalty_cap,
+                recovery_reward=self.config.need_safe_recovery_reward,
+            )
 
             unnecessary_penalty = agent.unnecessary_need_penalty(
                 Action(action_index).name,
@@ -139,17 +178,25 @@ class SimulationEngine:
                 rested=action_result.rested,
                 need_reward=need_reward,
                 unnecessary_action_penalty=unnecessary_penalty,
+                survival_priority_penalty=survival_priority_penalty,
+                need_safety_signal=need_safety_signal,
             )
             agent.total_reward += reward_result.total
             next_state = agent.perceive(self.world)
+            next_constraints = self.world.action_constraints(agent)
 
-            # REWARD -> REPLAY BUFFER -> BACKWARD/optimizer.step
-            loss = agent.remember_and_learn(
-                state, action_index, reward_result.total, next_state, died
+            # Phase 1: every living agent contributes to the species Horde.
+            agent.trainer.remember(
+                state,
+                action_index,
+                reward_result.total,
+                next_state,
+                died,
+                torch.tensor(next_constraints.mask, dtype=torch.bool),
             )
-            action_name = Action(action_index).name
+            learning_agents.append(agent)
             tick_rewards[agent.id] = reward_result.total
-            tick_losses[agent.id] = loss
+            tick_losses[agent.id] = None
             tick_actions[agent.id] = action_name
             tick_components[agent.id] = reward_result.components
             events[agent.id] = {
@@ -158,8 +205,8 @@ class SimulationEngine:
                 "action": action_name,
                 "reward": reward_result.total,
                 "reward_components": reward_result.components,
-                "loss": loss,
-                "trained": loss is not None,
+                "loss": None,
+                "trained": False,
                 "training_steps": agent.trainer.training_steps,
                 "replay_size": len(agent.trainer.replay_buffer),
                 "horde_replay_size": len(agent.trainer.learning_replay_buffer),
@@ -167,12 +214,25 @@ class SimulationEngine:
                 "exploration": agent.last_was_exploration,
                 "observation": [float(value) for value in state.tolist()],
                 "q_values": agent.last_q_values,
+                "brain_preferred_action": agent.last_brain_preferred_action,
+                "governor_override": agent.last_governor_override,
+                "governor_mode": constraints.mode,
+                "survival_priority": constraints.priority,
+                "allowed_actions": agent.last_allowed_actions,
             }
             if self.config.debug_rewards:
                 print(
                     f"DEBUG tick={tick} agent={agent.id} action={action_name} "
                     f"reward={reward_result.components}"
                 )
+        # Phase 2: now every brain samples after all same-tick group
+        # experiences are present. This removes within-tick Horde order bias.
+        for agent in learning_agents:
+            loss = agent.trainer.train_step()
+            tick_losses[agent.id] = loss
+            events[agent.id]["loss"] = loss
+            events[agent.id]["trained"] = loss is not None
+            events[agent.id]["training_steps"] = agent.trainer.training_steps
         self.last_agent_events = events
         self.world.validate()
         self.metrics.record(
@@ -229,6 +289,11 @@ class SimulationEngine:
         final_hashes = {agent.id: model_hash(agent) for agent in self.world.agents}
         summary_data = self._write_run_summary(results_dir)
         self.learning_summary = summary_data
+        from persistence.best_result import consider_run_for_brb
+
+        _, self.brb_promoted = consider_run_for_brb(
+            self.root, checkpoint_path, summary_data
+        )
         if self.config.generate_plots:
             comparison_paths = generate_comparison_plots(results_dir.parent)
         if not self.config.compact_console:
@@ -298,6 +363,17 @@ class SimulationEngine:
                 "exploration": event.get("exploration", False),
                 "observation": event.get("observation", []),
                 "q_values": event.get("q_values", agent.last_q_values),
+                "brain_preferred_action": event.get(
+                    "brain_preferred_action", agent.last_brain_preferred_action
+                ),
+                "governor_override": event.get(
+                    "governor_override", agent.last_governor_override
+                ),
+                "governor_mode": event.get("governor_mode", "valid_actions"),
+                "survival_priority": event.get("survival_priority"),
+                "allowed_actions": event.get(
+                    "allowed_actions", agent.last_allowed_actions
+                ),
                 "reward_components": event.get("reward_components", {}),
                 "brain_architecture": agent.brain.architecture,
                 "brain_activations": agent.last_brain_activations,
@@ -316,6 +392,9 @@ class SimulationEngine:
             "termination_reason": self.termination_reason,
             "learning_summary": self.learning_summary,
             "source_checkpoint": str(self.source_checkpoint) if self.source_checkpoint else None,
+            "brb_source": self.brb_source,
+            "brb_parents": self.brb_parents,
+            "brb_promoted": self.brb_promoted,
             "architecture_migrations": self.architecture_migrations,
             "learning_state_resets": self.learning_state_resets,
             "experiment_config": {
@@ -351,13 +430,17 @@ class SimulationEngine:
         """Attach one persistent collective replay to every species."""
         if not self.config.horde_learning_enabled:
             return {}
-        persisted = (
+        persisted_bundle = (
             load_horde_replay_state(self.source_checkpoint)
             if (
                 self.source_checkpoint is not None
                 and (self.source_checkpoint / "metadata.json").is_file()
+                and not self.learning_state_resets
             )
             else None
+        )
+        persisted, persisted_schemas = (
+            persisted_bundle if persisted_bundle is not None else (None, {})
         )
         buffers: dict[str, ReplayBuffer] = {}
         for agent_type, input_size in (
@@ -366,8 +449,19 @@ class SimulationEngine:
         ):
             replay = ReplayBuffer(self.config.horde_replay_capacity)
             if persisted is not None:
-                replay.load_state_dict(persisted[agent_type], input_size)
-            elif self.source_checkpoint is not None:
+                schema = persisted_schemas.get(agent_type, {})
+                replay.load_state_dict(
+                    persisted[agent_type], input_size,
+                    source_need_input_size=int(
+                        schema.get("need_input_size", input_size)
+                    ),
+                    target_need_input_size=(
+                        Human.NEED_INPUT_SIZE
+                        if agent_type == "human"
+                        else Animal.NEED_INPUT_SIZE
+                    ),
+                )
+            elif self.source_checkpoint is not None and not self.learning_state_resets:
                 # First Horde run from an older Brain v2 checkpoint: merge all
                 # personal histories so prior experience is not discarded.
                 combined: list[dict[str, object]] = []
@@ -438,7 +532,7 @@ class SimulationEngine:
             "initial_animals": self.config.num_animals,
             "final_animals": final_animals,
         })
-        by_type: dict[str, dict[str, float | str]] = {}
+        by_type: dict[str, dict[str, object]] = {}
         for agent_type in ("human", "animal"):
             subset = frame[frame["agent_type"] == agent_type]
             reward_tick = subset.groupby("tick")["reward"].mean()
@@ -455,6 +549,10 @@ class SimulationEngine:
                 "first_20_percent_loss": float(loss_tick.iloc[:max(1, len(loss_tick)//5)].mean()) if not loss_tick.empty else 0.0,
                 "last_20_percent_loss": float(loss_tick.iloc[-max(1, len(loss_tick)//5):].mean()) if not loss_tick.empty else 0.0,
                 "mean_survival": float(survival.loc[agent_type].mean()),
+                "individual_survival": {
+                    str(agent_id): int(value)
+                    for agent_id, value in survival.loc[agent_type].items()
+                },
                 "most_common_action": most_common_action,
                 "successful_drinks": int(subset["drank"].sum()),
                 "brain_selected_drinks": int(
@@ -464,6 +562,31 @@ class SimulationEngine:
                     (subset["drank"] & exploration_mask).sum()
                 ),
                 "successful_meals": int(subset["ate"].sum()),
+                "ignored_survival_priority_actions": int(
+                    (subset["survival_priority_penalty"] > 0).sum()
+                ),
+                "survival_priority_penalty_total": float(
+                    subset["survival_priority_penalty"].sum()
+                ),
+                "percent_ticks_above_safe_need": float(
+                    100.0
+                    * (
+                        (subset["hunger"] > self.config.need_safe_target)
+                        | (subset["thirst"] > self.config.need_safe_target)
+                    ).mean()
+                ),
+                "percent_ticks_in_need_danger": float(
+                    100.0
+                    * (
+                        (subset["hunger"] >= self.config.need_danger_threshold)
+                        | (subset["thirst"] >= self.config.need_danger_threshold)
+                    ).mean()
+                ),
+                "maximum_hunger": float(subset["hunger"].max()),
+                "maximum_thirst": float(subset["thirst"].max()),
+                "governor_override_percent": float(
+                    100.0 * subset["governor_override"].fillna(False).mean()
+                ),
                 "deaths_with_critical_thirst": int(
                     ((~subset.groupby("agent_id")["alive"].last().astype(bool))
                      & (subset.groupby("agent_id")["thirst"].last() >= 1.0)).sum()
@@ -522,7 +645,7 @@ class SimulationEngine:
 
     def _describe_learning(
         self,
-        by_type: dict[str, dict[str, float | str]],
+        by_type: dict[str, dict[str, object]],
         comparison: dict[str, float | int] | None,
     ) -> list[str]:
         descriptions: list[str] = []
@@ -555,6 +678,25 @@ class SimulationEngine:
                 f"Su acción más frecuente fue {_friendly_action(str(values['most_common_action']))}; "
                 "esto describe su conducta, "
                 "pero no demuestra por sí solo una estrategia útil."
+            )
+            ignored = int(values["ignored_survival_priority_actions"])
+            descriptions.append(
+                f"Ignoraron una prioridad vital {ignored} veces; esas decisiones "
+                "recibieron una penalización creciente y quedaron en Horde para "
+                "que todo el grupo pueda aprender de ellas."
+            )
+            descriptions.append(
+                f"Pasaron {float(values['percent_ticks_above_safe_need']):.1f}% "
+                "de sus ticks con hambre o sed por encima del 50%, y "
+                f"{float(values['percent_ticks_in_need_danger']):.1f}% en la "
+                "zona de peligro de 70% o más. El objetivo es reducir ambos "
+                "porcentajes, no solo retrasar la muerte."
+            )
+            descriptions.append(
+                "El gobernador de supervivencia corrigió "
+                f"{float(values['governor_override_percent']):.1f}% de sus "
+                "preferencias. Ese porcentaje debería bajar con el aprendizaje: "
+                "significaría que el brain ya propone por sí mismo acciones seguras."
             )
             successful_drinks = int(values["successful_drinks"])
             if successful_drinks:

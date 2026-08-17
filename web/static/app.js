@@ -9,11 +9,11 @@ const ui = Object.fromEntries([
   "apply-config-button", "human-count-input", "human-count-label",
   "animal-count-input", "animal-count-label", "human-brain-input",
   "human-brain-label", "animal-brain-input", "animal-brain-label",
-  "architecture-preview", "builder-help",
+  "architecture-preview", "builder-help", "use-brb-input", "brb-description",
   "all-humans-button", "all-animals-button",
   "agent-name", "agent-kind", "agent-empty", "agent-details", "vitals", "agent-action",
   "agent-reward", "agent-loss", "agent-mode", "agent-replay", "agent-updates", "epsilon-explanation",
-  "brain-network", "brain-network-caption", "spatial-memory",
+  "brain-network", "brain-network-caption", "brain-view-label", "spatial-memory",
   "q-values", "observations", "reward-components", "event-stream", "toast"
 ].map(id => [id, document.getElementById(id)]));
 
@@ -94,17 +94,40 @@ function render() {
 
 function renderExperimentBuilder() {
   const config = state.experiment_config;
+  const brb = state.brb;
   if (!configurationDirty) {
     ui["human-count-input"].value = config.num_humans;
     ui["animal-count-input"].value = config.num_animals;
     ui["human-brain-input"].value = config.human_hidden_sizes.at(-1);
     ui["animal-brain-input"].value = config.animal_hidden_sizes.at(-1);
   }
+  ui["use-brb-input"].disabled = !brb || !state.can_configure_experiment;
+  if (!brb) ui["use-brb-input"].checked = false;
+  applyBrbMinimums();
   updateBuilderLabels();
   ui["apply-config-button"].disabled = !state.can_configure_experiment;
+  const completion = brb?.final_humans == null
+    ? ""
+    : ` · ${brb.final_humans}/${brb.initial_humans} humanos completaron el ciclo`;
+  ui["brb-description"].textContent = brb
+    ? `Campeón: experimento ${pad(brb.experiment_id)}, run ${pad(brb.run_number)}${completion} · supervivencia media ${format(brb.mean_human_survival, 1)}, mediana ${format(brb.median_human_survival, 1)}.${brb.learning_contract_current ? "" : ` Pesos base v${brb.source_reward_version}; reward v${brb.current_reward_version} reinicia Adam/replay y solo lo reemplazará un resultado compatible mejor.`}`
+    : "Todavía no existe un run completo compatible para usar como campeón.";
   ui["builder-help"].textContent = state.can_configure_experiment
-    ? "Crea un experimento independiente con brains nuevos. Más agentes y neuronas requieren más CPU."
+    ? (ui["use-brb-input"].checked
+      ? "Copia los pesos del campeón. Mundo, cuerpos, Adam y replay Horde comienzan limpios para comparar el nuevo experimento."
+      : "Crea un experimento independiente con brains nuevos. Más agentes y neuronas requieren más CPU.")
     : "Bloqueado durante el run. Termina el ciclo para crear otro experimento; Siguiente ciclo conserva los brains actuales.";
+}
+
+function applyBrbMinimums() {
+  const brb = state?.brb;
+  const enabled = Boolean(brb && ui["use-brb-input"].checked);
+  const humanMinimum = enabled ? Number(brb.minimum_human_width) : 8;
+  const animalMinimum = enabled ? Number(brb.minimum_animal_width) : 8;
+  ui["human-brain-input"].min = humanMinimum;
+  ui["animal-brain-input"].min = animalMinimum;
+  if (Number(ui["human-brain-input"].value) < humanMinimum) ui["human-brain-input"].value = humanMinimum;
+  if (Number(ui["animal-brain-input"].value) < animalMinimum) ui["animal-brain-input"].value = animalMinimum;
 }
 
 function updateBuilderLabels() {
@@ -116,13 +139,15 @@ function updateBuilderLabels() {
   ui["animal-count-label"].textContent = animals;
   ui["human-brain-label"].textContent = `${humanWidth} neuronas/capa`;
   ui["animal-brain-label"].textContent = `${animalWidth} neuronas`;
-  ui["architecture-preview"].textContent = `Humano: necesidades 8→${Math.max(8, humanWidth / 2)}, espacio 18→${humanWidth}, fusión ${humanWidth}→8 · Animal: espacio 16→${animalWidth} · ${humans + animals} brains v2`;
+  ui["architecture-preview"].textContent = `Humano: supervivencia 15→${Math.max(8, humanWidth / 2)}, espacio 18→${humanWidth}, fusión ${humanWidth}→8 · Animal: supervivencia 15, espacio 16→${animalWidth} · ${humans + animals} brains v2`;
 }
 
 function renderWorld() {
   const {width, height, food, water, obstacles} = state.grid;
   const canvas = ui.world;
-  const cellSize = 12;
+  // Render at a larger native pixel resolution, then let CSS fit the same panel.
+  // This keeps every tiny sprite crisp on high-density displays.
+  const cellSize = 16;
   canvas.width = width * cellSize;
   canvas.height = height * cellSize;
   canvas.style.aspectRatio = `${width} / ${height}`;
@@ -135,35 +160,51 @@ function renderWorld() {
   for (const [x, y] of food) matrix[y][x] = 2;
   for (const [x, y] of water) matrix[y][x] = 3;
 
-  context.fillStyle = "#e8e5d8";
+  context.fillStyle = "#dfe1cf";
   context.fillRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) drawMatrixCell(context, matrix[y][x], x, y, cellSize);
+    for (let x = 0; x < width; x += 1) drawMatrixCell(context, matrix[y][x], x, y, cellSize, matrix);
   }
   for (const agent of state.agents) drawPixelAgent(context, agent, cellSize, agent.id === selectedAgentId);
 }
 
-function drawMatrixCell(context, value, x, y, size) {
+function drawMatrixCell(context, value, x, y, size, matrix) {
   const px = x * size;
   const py = y * size;
-  context.strokeStyle = "rgba(55, 67, 58, .07)";
-  context.strokeRect(px + .5, py + .5, size - 1, size - 1);
+  const terrain = (x + y) % 2 === 0 ? "#dfe2cf" : "#d9ddc8";
+  context.fillStyle = terrain;
+  context.fillRect(px, py, size, size);
+  context.fillStyle = "rgba(75, 99, 69, .16)";
+  if ((x * 7 + y * 11) % 13 === 0) context.fillRect(px + 3, py + 11, 2, 1);
   if (value === 1) {
-    context.fillStyle = "#58605b";
-    context.fillRect(px + 1, py + 1, size - 2, size - 2);
-    context.fillStyle = "#707a73";
-    context.fillRect(px + 2, py + 2, size - 5, 2);
+    context.fillStyle = "rgba(38,49,43,.18)";
+    context.fillRect(px + 3, py + 12, 11, 3);
+    context.fillStyle = "#5e6861";
+    context.fillRect(px + 2, py + 6, 12, 7);
+    context.fillRect(px + 4, py + 3, 8, 10);
+    context.fillStyle = "#879087";
+    context.fillRect(px + 5, py + 4, 6, 2);
+    context.fillRect(px + 3, py + 7, 3, 2);
   } else if (value === 2) {
-    context.fillStyle = "#78943e";
-    context.fillRect(px + 3, py + 3, size - 6, size - 5);
-    context.fillStyle = "#a8bd62";
-    context.fillRect(px + 4, py + 2, Math.max(2, size - 8), 3);
+    context.fillStyle = "#6e5937";
+    context.fillRect(px + 4, py + 12, 9, 2);
+    context.fillStyle = "#357143";
+    context.fillRect(px + 7, py + 4, 2, 9);
+    context.fillStyle = "#75a94e";
+    context.fillRect(px + 3, py + 5, 5, 4);
+    context.fillRect(px + 9, py + 3, 4, 5);
+    context.fillStyle = "#d99a3f";
+    context.fillRect(px + 10, py + 8, 3, 3);
   } else if (value === 3) {
-    context.fillStyle = "#397fa5";
-    context.fillRect(px + 1, py + 1, size - 2, size - 2);
-    context.fillStyle = "#76b8d3";
-    context.fillRect(px + 2, py + 3, size - 5, 2);
-    context.fillRect(px + 5, py + 7, size - 7, 2);
+    context.fillStyle = "#2879a4";
+    context.fillRect(px, py, size, size);
+    context.fillStyle = (x + y) % 3 === 0 ? "#78c4dd" : "#53a8ca";
+    context.fillRect(px + 1, py + 4, 7, 2);
+    context.fillRect(px + 9, py + 11, 6, 2);
+    // A pale shoreline makes large permanent ponds readable as clusters.
+    context.fillStyle = "#a8d9dd";
+    if (y === 0 || matrix[y - 1][x] !== 3) context.fillRect(px, py, size, 1);
+    if (x === 0 || matrix[y][x - 1] !== 3) context.fillRect(px, py, 1, size);
   }
 }
 
@@ -171,39 +212,53 @@ function drawPixelAgent(context, agent, size, selected) {
   const px = agent.x * size;
   const py = agent.y * size;
   if (selected) {
-    context.strokeStyle = "#fffdf4";
+    context.fillStyle = "rgba(255,246,179,.55)";
+    context.fillRect(px, py, size, size);
+    context.strokeStyle = "#fff8bd";
     context.lineWidth = 2;
     context.strokeRect(px + 1, py + 1, size - 2, size - 2);
-    context.strokeStyle = "#17201c";
-    context.lineWidth = 1;
-    context.strokeRect(px + .5, py + .5, size - 1, size - 1);
   }
   if (!agent.alive) {
     context.strokeStyle = "rgba(60, 60, 57, .55)";
     context.lineWidth = 2;
     context.beginPath();
-    context.moveTo(px + 3, py + 3);
-    context.lineTo(px + size - 3, py + size - 3);
-    context.moveTo(px + size - 3, py + 3);
-    context.lineTo(px + 3, py + size - 3);
+    context.moveTo(px + 4, py + 4);
+    context.lineTo(px + size - 4, py + size - 4);
+    context.moveTo(px + size - 4, py + 4);
+    context.lineTo(px + 4, py + size - 4);
     context.stroke();
     return;
   }
   if (agent.type === "human") {
-    // A vertical pixel person: square head over a narrow body (o above -).
-    context.fillStyle = "#f2ae52";
-    context.fillRect(px + 4, py + 1, 4, 4);
-    context.fillStyle = "#d76530";
-    context.fillRect(px + 5, py + 5, 2, 6);
-    context.fillRect(px + 3, py + 6, 6, 2);
+    // Vertical pixel person: warm skin, bright torso, arms and separate legs.
+    context.fillStyle = "rgba(52,38,27,.22)";
+    context.fillRect(px + 5, py + 14, 7, 1);
+    context.fillStyle = "#f2b06b";
+    context.fillRect(px + 6, py + 1, 5, 5);
+    context.fillStyle = "#7f3f2b";
+    context.fillRect(px + 6, py + 1, 5, 2);
+    context.fillStyle = "#df6235";
+    context.fillRect(px + 6, py + 6, 5, 6);
+    context.fillRect(px + 3, py + 7, 3, 2);
+    context.fillRect(px + 11, py + 7, 3, 2);
+    context.fillStyle = "#324d62";
+    context.fillRect(px + 6, py + 12, 2, 3);
+    context.fillRect(px + 9, py + 12, 2, 3);
   } else {
-    // A horizontal pixel animal: head followed by a pointed body (o<).
-    context.fillStyle = "#9ac45d";
-    context.fillRect(px + 1, py + 4, 4, 4);
-    context.fillStyle = "#236b50";
-    context.fillRect(px + 5, py + 5, 5, 3);
-    context.fillRect(px + 8, py + 3, 2, 2);
-    context.fillRect(px + 8, py + 8, 2, 2);
+    // Horizontal four-legged animal with a head and visible tail.
+    context.fillStyle = "rgba(34,54,38,.2)";
+    context.fillRect(px + 2, py + 13, 12, 1);
+    context.fillStyle = "#367a50";
+    context.fillRect(px + 4, py + 6, 9, 6);
+    context.fillRect(px + 11, py + 4, 4, 6);
+    context.fillRect(px + 2, py + 7, 3, 2);
+    context.fillStyle = "#8fbd63";
+    context.fillRect(px + 6, py + 7, 5, 2);
+    context.fillStyle = "#285c43";
+    context.fillRect(px + 5, py + 12, 2, 3);
+    context.fillRect(px + 11, py + 11, 2, 4);
+    context.fillStyle = "#eef4d8";
+    context.fillRect(px + 13, py + 6, 1, 1);
   }
 }
 
@@ -228,6 +283,9 @@ function renderInspector() {
   ui["agent-kind"].textContent = individual
     ? `${individual.type} · ${individual.alive ? "vivo" : "muerto"}`
     : `grupo · ${selected.filter(agent => agent.alive).length}/${selected.length} vivos`;
+  ui["brain-view-label"].textContent = individual
+    ? `${individual.id} · ${individual.alive ? "vivo" : "muerto"}`
+    : `${selectedScope === "human" ? "Humanos" : "Animales"} · promedio de ${selected.length} brains`;
   const vitals = [
     ["Salud", view.health, false], ["Energía", view.energy, false],
     ["Hambre", view.hunger, true], ["Sed", view.thirst, true]
@@ -239,8 +297,8 @@ function renderInspector() {
   ui["agent-reward"].textContent = signed(view.reward, 3);
   ui["agent-loss"].textContent = view.loss == null ? "—" : format(view.loss, 4);
   ui["agent-mode"].textContent = individual
-    ? `${individual.exploration_profile === "scout" ? "Explorador Horde" : "Perfil normal"} · ${view.exploration > 0 ? "explora ahora" : "decide el brain"} · ε ${format(view.epsilon, 2)}`
-    : `${view.scouts}/${selected.length} exploradores · ${format(view.exploration * 100, 0)}% explorando ahora · ε̄ ${format(view.epsilon, 2)}`;
+    ? `${individual.exploration_profile === "scout" ? "Explorador Horde" : "Perfil normal"} · ${view.exploration > 0 ? "explora ahora" : "decide el brain"} · ε ${format(view.epsilon, 2)}${individual.governor_override ? ` · gobernador cambió ${individual.brain_preferred_action} → ${individual.action}` : ""}${individual.survival_priority ? ` · prioridad ${individual.survival_priority}` : ""}`
+    : `${view.scouts}/${selected.length} exploradores · ${format(view.exploration * 100, 0)}% explorando ahora · ε̄ ${format(view.epsilon, 2)} · gobernador interviene en ${format(view.governor_override * 100, 0)}%`;
   ui["epsilon-explanation"].textContent = `ε ${format(view.epsilon, 2)} significa cerca de ${format(view.epsilon * 100, 0)}% de probabilidad de probar una acción aleatoria. Es un rasgo individual persistente: perfiles normales 1–15%; exploradores Horde 50%.`;
   ui["agent-replay"].textContent = individual
     ? `Personal ${view.replay_size} · Horde ${view.horde_replay_size}`
@@ -288,6 +346,7 @@ function aggregateAgents(agents) {
     health: mean("health"), energy: mean("energy"), hunger: mean("hunger"), thirst: mean("thirst"),
     reward: mean("reward"), loss: meanNullable("loss"), epsilon: mean("epsilon"),
     exploration: agents.filter(agent => agent.exploration).length / agents.length,
+    governor_override: agents.filter(agent => agent.governor_override).length / agents.length,
     scouts: agents.filter(agent => agent.exploration_profile === "scout").length,
     replay_size: mean("replay_size"), horde_replay_size: mean("horde_replay_size"),
     training_steps: mean("training_steps"), action,
@@ -323,33 +382,62 @@ function drawBrainNetwork(view, viewKey) {
   const architecture = view.brain_architecture || {};
   const activations = view.brain_activations || {};
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#f4f3ed";
+  context.fillStyle = "#eef1e9";
   context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "rgba(255,255,255,.46)";
+  context.fillRect(24, 52, 510, 420);
+  context.fillStyle = "rgba(219,232,223,.72)";
+  context.fillRect(570, 52, 300, 420);
+  context.fillStyle = "rgba(232,224,239,.55)";
+  context.fillRect(910, 52, 380, 420);
+  context.font = "700 11px system-ui";
+  context.fillStyle = "#79847d";
+  context.fillText("1 · INTERPRETAR", 42, 78);
+  context.fillText("2 · INTEGRAR", 590, 78);
+  context.fillText("3 · DECIDIR", 930, 78);
   const layers = [
-    {key: "need_inputs", label: `Necesidades ${architecture.need_input_size || 0}`, x: 55, y: 75, h: 105, color: "#d97338"},
-    {key: "need_hidden", label: `Rama necesidad ${architecture.hidden_sizes?.[0] || 0}`, x: 185, y: 75, h: 105, color: "#d97338"},
-    {key: "spatial_inputs", label: `Espacio/memoria ${architecture.spatial_input_size || 0}`, x: 55, y: 220, h: 125, color: "#397fa5"},
-    {key: "spatial_hidden", label: `Rama espacial ${architecture.hidden_sizes?.[1] || 0}`, x: 185, y: 220, h: 125, color: "#397fa5"},
-    {key: "fusion_hidden", label: `Fusión ${architecture.hidden_sizes?.[2] || 0}`, x: 355, y: 150, h: 155, color: "#236b50"},
-    {key: "q_values", label: "8 acciones", x: 545, y: 150, h: 155, color: "#78588f"},
+    {key: "need_inputs", label: `Necesidades · ${architecture.need_input_size || 0} entradas`, x: 75, y: 190, h: 180, color: "#dc6b35"},
+    {key: "need_hidden", label: `Prioridad vital · ${architecture.hidden_sizes?.[0] || 0}`, x: 310, y: 190, h: 180, color: "#e28a3f"},
+    {key: "spatial_inputs", label: `Mundo y memoria · ${architecture.spatial_input_size || 0}`, x: 75, y: 385, h: 120, color: "#367fa7"},
+    {key: "spatial_hidden", label: `Comprensión espacial · ${architecture.hidden_sizes?.[1] || 0}`, x: 310, y: 385, h: 120, color: "#52a2bd"},
+    {key: "fusion_hidden", label: `Fusión · ${architecture.hidden_sizes?.[2] || 0} neuronas`, x: 720, y: 278, h: 310, color: "#277657"},
+    {key: "q_values", label: "Q-values · 8 acciones", x: 1035, y: 278, h: 310, color: "#78588f"},
   ];
   const positions = Object.fromEntries(layers.map(layer => [layer.key, nodePositions(layer, activations[layer.key] || [])]));
   for (const [from, to] of [["need_inputs", "need_hidden"], ["spatial_inputs", "spatial_hidden"], ["need_hidden", "fusion_hidden"], ["spatial_hidden", "fusion_hidden"], ["fusion_hidden", "q_values"]]) {
-    context.strokeStyle = "rgba(70, 79, 73, .13)";
-    context.lineWidth = 1;
     for (const a of positions[from]) for (const b of positions[to]) {
+      const signal = Math.min(1, (Math.abs(a.value) + Math.abs(b.value)) / 2);
+      context.strokeStyle = `rgba(55, 105, 79, ${.035 + signal * .16})`;
+      context.lineWidth = .65 + signal * 1.1;
       context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.stroke();
     }
   }
+  const pulse = .9 + Math.sin(performance.now() / 170) * .1;
   for (const layer of layers) {
-    context.fillStyle = "#667069"; context.font = "600 10px system-ui"; context.textAlign = "center";
-    context.fillText(layer.label, layer.x, layer.y - layer.h / 2 - 16);
+    context.fillStyle = "#526158"; context.font = "650 12px system-ui"; context.textAlign = "center";
+    context.fillText(layer.label, layer.x, layer.y - layer.h / 2 - 18);
     positions[layer.key].forEach((node, index) => {
       const value = node.value;
       const strength = Math.min(1, Math.abs(value));
-      context.globalAlpha = .25 + strength * .75;
+      context.globalAlpha = .3 + strength * .7;
       context.fillStyle = layer.key === "q_values" && ACTIONS[index] === view.action ? "#f2ae52" : layer.color;
-      context.beginPath(); context.arc(node.x, node.y, 4 + strength * 3, 0, Math.PI * 2); context.fill();
+      if (strength > .45) {
+        context.shadowColor = layer.key === "q_values" ? "#d7a75e" : layer.color;
+        context.shadowBlur = 7 + strength * 9 * pulse;
+      }
+      context.beginPath(); context.arc(node.x, node.y, 5 + strength * 4 * pulse, 0, Math.PI * 2); context.fill();
+      context.shadowBlur = 0;
+      context.globalAlpha = 1;
+      context.strokeStyle = "rgba(255,255,255,.75)";
+      context.lineWidth = 1;
+      context.stroke();
+      if (layer.key === "q_values") {
+        context.fillStyle = ACTIONS[index] === view.action ? "#9a541f" : "#5f5664";
+        context.font = ACTIONS[index] === view.action ? "750 11px system-ui" : "500 10px system-ui";
+        context.textAlign = "left";
+        context.fillText(`${ACTIONS[index]}  ${format(value, 3)}`, node.x + 18, node.y + 4);
+        context.textAlign = "center";
+      }
       context.globalAlpha = 1;
     });
   }
@@ -364,7 +452,7 @@ function drawBrainNetwork(view, viewKey) {
 }
 
 function nodePositions(layer, values) {
-  const count = Math.max(1, Math.min(10, values.length));
+  const count = Math.max(1, Math.min(16, values.length));
   return Array.from({length: count}, (_, index) => {
     const sourceIndex = values.length <= count ? index : Math.round(index * (values.length - 1) / Math.max(1, count - 1));
     return {x: layer.x, y: layer.y - layer.h / 2 + (index + 1) * layer.h / (count + 1), value: Number(values[sourceIndex] || 0)};
@@ -386,9 +474,12 @@ function renderTrainingState() {
     const reason = state.termination_reason === "human_extinction"
       ? `Run detenido en el tick ${state.tick}: murió el último humano.`
       : `Run terminado en el tick ${state.tick}.`;
-    ui["training-message"].textContent = `${reason} Checkpoints y métricas guardados en ${state.result?.results_dir || "results/"}.`;
+    const champion = state.brb_promoted ? " Este run superó el campeón anterior y ahora es el nuevo BRB." : "";
+    ui["training-message"].textContent = `${reason}${champion} Checkpoints y métricas guardados en ${state.result?.results_dir || "results/"}.`;
+  } else if (state.tick === 0 && state.brb_source) {
+    ui["training-message"].textContent = `Nuevo experimento desde BRB: ${state.agents.length} brains heredaron pesos de ${state.brb_source}. Adam, replay Horde, cuerpos y mundo comenzaron limpios.`;
   } else if (trained > 0) {
-    ui["training-message"].textContent = `${trained} agentes actualizaron sus pesos en este tick. La loss mostrada proviene de backpropagation real.`;
+    ui["training-message"].textContent = `${trained} brains actualizaron sus pesos después de reunir todas las experiencias del tick en Horde. La loss proviene de backpropagation real.`;
   } else if (state.tick === 0 && state.continued_from) {
     const migration = state.architecture_migrations?.length
       ? ` ${state.architecture_migrations.length} brains fueron ensanchados conservando sus outputs iniciales.`
@@ -511,12 +602,18 @@ for (const id of ["human-count-input", "animal-count-input", "human-brain-input"
     updateBuilderLabels();
   });
 }
+ui["use-brb-input"].addEventListener("change", () => {
+  configurationDirty = true;
+  applyBrbMinimums();
+  renderExperimentBuilder();
+});
 ui["apply-config-button"].addEventListener("click", () => {
   const settings = {
     num_humans: Number(ui["human-count-input"].value),
     num_animals: Number(ui["animal-count-input"].value),
     human_brain_width: Number(ui["human-brain-input"].value),
-    animal_brain_width: Number(ui["animal-brain-input"].value)
+    animal_brain_width: Number(ui["animal-brain-input"].value),
+    use_brb: ui["use-brb-input"].checked
   };
   selectedAgentId = null;
   selectedScope = "human";

@@ -66,6 +66,13 @@
           <input id="animal-brain-input" type="range" min="8" max="64" step="8" value="24">
         </label>
       </div>
+      <label class="brb-option">
+        <input id="use-brb-input" type="checkbox">
+        <span>
+          <strong>Usar Best Result Brain (BRB)</strong>
+          <small id="brb-description">Buscando el mejor brain guardado…</small>
+        </span>
+      </label>
       <div class="builder-footer">
         <span id="architecture-preview">Brain v2: necesidades + memoria espacial → fusión → acciones</span>
         <span id="builder-help">Configurable antes del primer tick o al terminar el run. Más agentes y neuronas requieren más CPU.</span>
@@ -159,12 +166,6 @@
             </div>
             <p id="epsilon-explanation" class="epsilon-explanation"></p>
 
-            <section class="brain-section neural-lab">
-              <div class="section-label"><h3>Brain v2 en vivo</h3><span>activaciones, decisión y pesos</span></div>
-              <canvas id="brain-network" width="620" height="330" aria-label="Diagrama de activaciones del brain"></canvas>
-              <p id="brain-network-caption" class="brain-caption"></p>
-            </section>
-
             <section class="brain-section">
               <div class="section-label"><h3>Memoria espacial</h3><span>último recurso visto, no omnisciencia</span></div>
               <div id="spatial-memory" class="memory-grid"></div>
@@ -190,6 +191,18 @@
           <div id="event-stream" class="event-stream"></div>
         </article>
       </aside>
+    </section>
+
+    <section class="panel neural-lab neural-lab-wide">
+      <div class="neural-lab-heading">
+        <div>
+          <p class="eyebrow">BRAIN V2 EN VIVO</p>
+          <h2>La decisión neuronal, capa por capa</h2>
+        </div>
+        <strong id="brain-view-label" class="brain-view-label">Todos los humanos</strong>
+      </div>
+      <canvas id="brain-network" width="1320" height="520" aria-label="Diagrama grande de activaciones del brain"></canvas>
+      <p id="brain-network-caption" class="brain-caption"></p>
     </section>
   </main>
 

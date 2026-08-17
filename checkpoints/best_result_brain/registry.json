@@ -1,0 +1,248 @@
+{
+  "version": 1,
+  "score_version": 2,
+  "created_at": "2026-08-17T04:53:27.437776+00:00",
+  "experiment_id": 33,
+  "run_number": 1,
+  "source_checkpoint": "/Users/ronnie/Documents/lifesim/checkpoints/experiment_033/run_001",
+  "champion_dir": "checkpoints/best_result_brain/champions/experiment_033_run_001",
+  "score_vector": [
+    1.0,
+    0.4,
+    2.0,
+    696.0,
+    2388.0,
+    117.0,
+    149.0,
+    -47.0
+  ],
+  "score": {
+    "completed_tick_limit": true,
+    "human_completion_ratio": 0.4,
+    "final_humans": 2,
+    "initial_humans": 5,
+    "mean_human_survival": 2388.0,
+    "median_human_survival": 696.0,
+    "brain_selected_drinks": 117,
+    "successful_meals": 149,
+    "last_human_tick": 5000
+  },
+  "config": {
+    "reward_version": 5,
+    "brain_architecture_version": 2,
+    "grid_width": 60,
+    "grid_height": 40,
+    "num_humans": 5,
+    "num_animals": 10,
+    "initial_food": 90,
+    "initial_water": 120,
+    "initial_obstacles": 100,
+    "food_cluster_count": 9,
+    "water_cluster_count": 9,
+    "max_food": 130,
+    "food_respawn_probability": 0.08,
+    "water_respawn_probability": 0.0,
+    "num_ticks": 5000,
+    "stop_when_no_humans": true,
+    "status_every": 100,
+    "render_every": 0,
+    "compact_console": false,
+    "generate_plots": true,
+    "max_health": 1.0,
+    "max_energy": 1.0,
+    "hunger_per_tick": 0.005,
+    "thirst_per_tick": 0.005,
+    "energy_per_tick": 0.005,
+    "starvation_damage": 0.025,
+    "dehydration_damage": 0.02,
+    "rest_energy_gain": 0.1,
+    "food_hunger_reduction": 0.5,
+    "water_thirst_reduction": 0.6,
+    "need_action_threshold": 0.25,
+    "priority_need_threshold": 0.25,
+    "need_reward_scale": 1.0,
+    "unnecessary_action_penalty_base": 0.1,
+    "unnecessary_action_penalty_cap": 1.0,
+    "survival_priority_threshold": 0.25,
+    "survival_priority_penalty_base": 0.05,
+    "survival_priority_penalty_scale": 0.25,
+    "survival_priority_penalty_cap": 0.6,
+    "need_safe_target": 0.5,
+    "need_danger_threshold": 0.7,
+    "need_penalty_at_danger": 0.3,
+    "need_penalty_cap": 0.8,
+    "need_safe_recovery_reward": 0.25,
+    "survival_travel_reserve_ticks": 5.0,
+    "vision_radius": 6,
+    "resource_sense_radius": 100,
+    "spatial_memory_max_age": 200,
+    "epsilon_standard_min": 0.01,
+    "epsilon_standard_max": 0.15,
+    "epsilon_scout": 0.5,
+    "epsilon_scout_fraction": 0.1,
+    "horde_learning_enabled": true,
+    "horde_replay_capacity": 20000,
+    "debug_rewards": false,
+    "human_brain": {
+      "hidden_sizes": [
+        16,
+        32,
+        32
+      ],
+      "learning_rate": 0.001,
+      "replay_capacity": 5000,
+      "batch_size": 32,
+      "gamma": 0.99,
+      "train_every": 4,
+      "target_update_interval": 100,
+      "positive_replay_fraction": 0.25
+    },
+    "animal_brain": {
+      "hidden_sizes": [
+        12,
+        24,
+        24
+      ],
+      "learning_rate": 0.001,
+      "replay_capacity": 5000,
+      "batch_size": 32,
+      "gamma": 0.99,
+      "train_every": 4,
+      "target_update_interval": 100,
+      "positive_replay_fraction": 0.25
+    }
+  },
+  "architectures": {
+    "human": {
+      "architecture_version": 2,
+      "input_size": 33,
+      "need_input_size": 15,
+      "spatial_input_size": 18,
+      "hidden_sizes": [
+        16,
+        32,
+        32
+      ],
+      "output_size": 8
+    },
+    "animal": {
+      "architecture_version": 2,
+      "input_size": 31,
+      "need_input_size": 15,
+      "spatial_input_size": 16,
+      "hidden_sizes": [
+        12,
+        24,
+        24
+      ],
+      "output_size": 8
+    }
+  },
+  "agents": [
+    {
+      "agent_id": "human_001",
+      "agent_type": "human",
+      "file": "human_001.pt",
+      "steps_survived": 5000,
+      "total_reward": -60.45032916666643
+    },
+    {
+      "agent_id": "human_002",
+      "agent_type": "human",
+      "file": "human_002.pt",
+      "steps_survived": 629,
+      "total_reward": -41.19311250000006
+    },
+    {
+      "agent_id": "human_003",
+      "agent_type": "human",
+      "file": "human_003.pt",
+      "steps_survived": 697,
+      "total_reward": -105.11015416666675
+    },
+    {
+      "agent_id": "human_004",
+      "agent_type": "human",
+      "file": "human_004.pt",
+      "steps_survived": 617,
+      "total_reward": -53.13054583333339
+    },
+    {
+      "agent_id": "human_005",
+      "agent_type": "human",
+      "file": "human_005.pt",
+      "steps_survived": 5000,
+      "total_reward": 154.45136666666747
+    },
+    {
+      "agent_id": "animal_001",
+      "agent_type": "animal",
+      "file": "animal_001.pt",
+      "steps_survived": 684,
+      "total_reward": -64.82866666666673
+    },
+    {
+      "agent_id": "animal_002",
+      "agent_type": "animal",
+      "file": "animal_002.pt",
+      "steps_survived": 614,
+      "total_reward": -89.01776666666684
+    },
+    {
+      "agent_id": "animal_003",
+      "agent_type": "animal",
+      "file": "animal_003.pt",
+      "steps_survived": 658,
+      "total_reward": -104.64016250000014
+    },
+    {
+      "agent_id": "animal_004",
+      "agent_type": "animal",
+      "file": "animal_004.pt",
+      "steps_survived": 5000,
+      "total_reward": 85.3539958333354
+    },
+    {
+      "agent_id": "animal_005",
+      "agent_type": "animal",
+      "file": "animal_005.pt",
+      "steps_survived": 662,
+      "total_reward": -38.922766666666725
+    },
+    {
+      "agent_id": "animal_006",
+      "agent_type": "animal",
+      "file": "animal_006.pt",
+      "steps_survived": 694,
+      "total_reward": -107.48245833333343
+    },
+    {
+      "agent_id": "animal_007",
+      "agent_type": "animal",
+      "file": "animal_007.pt",
+      "steps_survived": 5000,
+      "total_reward": 212.85791250000162
+    },
+    {
+      "agent_id": "animal_008",
+      "agent_type": "animal",
+      "file": "animal_008.pt",
+      "steps_survived": 599,
+      "total_reward": -65.96100000000011
+    },
+    {
+      "agent_id": "animal_009",
+      "agent_type": "animal",
+      "file": "animal_009.pt",
+      "steps_survived": 586,
+      "total_reward": -43.98213333333336
+    },
+    {
+      "agent_id": "animal_010",
+      "agent_type": "animal",
+      "file": "animal_010.pt",
+      "steps_survived": 683,
+      "total_reward": -45.17383333333334
+    }
+  ]
+}

@@ -13,7 +13,11 @@ from agents.brain import AgentBrain
 from agents.human import Human
 from config import BrainConfig, SimulationConfig
 from learning.replay_buffer import Experience, ReplayBuffer
-from learning.rewards import calculate_reward
+from learning.rewards import (
+    calculate_need_safety_signal,
+    calculate_reward,
+    calculate_survival_priority_penalty,
+)
 from persistence.checkpoints import (
     CheckpointError,
     _load_widened_state_dict,
@@ -22,8 +26,9 @@ from persistence.checkpoints import (
     read_metadata,
     save_run_checkpoints,
 )
+from persistence.best_result import _score, brb_public_summary, load_brb_payloads
 from simulation.engine import SimulationEngine
-from simulation.experiment import build_resumed_engine, run_continuous
+from simulation.experiment import build_brb_engine, build_resumed_engine, run_continuous
 from web.server import WebSimulationController
 from world.grid import Action
 from world.world import World
@@ -88,9 +93,9 @@ def test_horde_replay_is_shared_by_species_but_brains_remain_independent(
     assert len(humans[0].trainer.replay_buffer) == 1
     assert len(humans[0].trainer.learning_replay_buffer) == 2
     assert len(animals[0].trainer.learning_replay_buffer) == 2
+    assert all(agent.trainer.training_steps > 0 for agent in humans)
     engine.step()
     assert len(humans[0].trainer.learning_replay_buffer) == 4
-    assert all(agent.trainer.training_steps > 0 for agent in humans)
 
 
 def test_brain_output_shape() -> None:
@@ -122,6 +127,59 @@ def test_agent_can_move() -> None:
     result = world.execute_action(agent, Action.MOVE_RIGHT)
     assert not result.invalid
     assert (agent.x, agent.y) == (3, 2)
+
+
+def test_action_mask_removes_physically_impossible_actions() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    agent = Human.create("human_001", 0, 0, config)
+    world.agents = [agent]
+    constraints = world.action_constraints(agent)
+    assert not constraints.mask[Action.MOVE_UP]
+    assert not constraints.mask[Action.MOVE_LEFT]
+    assert not constraints.mask[Action.EAT]
+    assert not constraints.mask[Action.DRINK]
+    assert constraints.mask[Action.MOVE_RIGHT]
+
+
+def test_survival_governor_forces_consumption_when_urgent_resource_is_reachable() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    agent = Human.create("human_001", 2, 2, config)
+    world.agents = [agent]
+    world.water.add((3, 2))
+    agent.thirst = 0.50
+    constraints = world.action_constraints(agent)
+    assert constraints.mode == "survival"
+    assert constraints.priority == "water"
+    assert [Action(index) for index, allowed in enumerate(constraints.mask) if allowed] == [
+        Action.DRINK
+    ]
+
+
+def test_survival_governor_routes_toward_remembered_resource() -> None:
+    config = small_config()
+    config.resource_sense_radius = 8
+    world = World(config, populate=False)
+    agent = Human.create("human_001", 1, 1, config)
+    world.agents = [agent]
+    world.food.add((5, 1))
+    agent.hunger = 0.50
+    agent.perceive(world)
+    constraints = world.action_constraints(agent)
+    assert constraints.target == (5, 1)
+    assert constraints.mask[Action.MOVE_RIGHT]
+    assert sum(constraints.mask) == 1
+
+
+def test_brain_action_selection_respects_governor_mask() -> None:
+    config = small_config()
+    agent = Human.create("human_001", 1, 1, config)
+    state = torch.zeros(Human.INPUT_SIZE)
+    mask = [action is Action.MOVE_RIGHT for action in Action]
+    action = agent.choose_action(state, action_mask=mask)
+    assert action == Action.MOVE_RIGHT
+    assert agent.last_allowed_actions == ["MOVE_RIGHT"]
 
 
 def test_eating_modifies_hunger() -> None:
@@ -188,6 +246,90 @@ def test_unnecessary_drinking_has_escalating_penalty() -> None:
         repeating=False, unnecessary_action_penalty=second_penalty,
     )
     assert reward.components["unnecessary_need_action"] == -0.2
+
+
+def test_wait_is_penalized_more_when_survival_is_critical() -> None:
+    healthy = calculate_survival_priority_penalty(
+        action_name="WAIT", hunger=0.20, thirst=0.20, energy=0.90,
+        health=1.0, threshold=0.50, base=0.05, scale=0.25, cap=0.60,
+    )
+    urgent = calculate_survival_priority_penalty(
+        action_name="WAIT", hunger=1.0, thirst=0.70, energy=0.50,
+        health=0.20, threshold=0.50, base=0.05, scale=0.25, cap=0.60,
+    )
+    correct = calculate_survival_priority_penalty(
+        action_name="EAT", hunger=1.0, thirst=0.70, energy=0.50,
+        health=0.20, threshold=0.50, base=0.05, scale=0.25, cap=0.60,
+    )
+    searching = calculate_survival_priority_penalty(
+        action_name="MOVE_LEFT", hunger=1.0, thirst=0.70, energy=0.50,
+        health=0.20, threshold=0.50, base=0.05, scale=0.25, cap=0.60,
+    )
+    assert healthy == 0.0
+    assert urgent == pytest.approx(0.54)
+    assert correct == 0.0
+    assert searching == 0.0
+
+
+def test_wrong_movement_is_penalized_when_an_urgent_target_is_known() -> None:
+    closer = calculate_survival_priority_penalty(
+        action_name="MOVE_LEFT", hunger=0.60, thirst=0.20, energy=0.90,
+        health=1.0, threshold=0.35, base=0.05, scale=0.25, cap=0.60,
+        movement_has_known_target=True, resource_progress=0.11,
+    )
+    wandering = calculate_survival_priority_penalty(
+        action_name="MOVE_RIGHT", hunger=0.60, thirst=0.20, energy=0.90,
+        health=1.0, threshold=0.35, base=0.05, scale=0.25, cap=0.60,
+        movement_has_known_target=True, resource_progress=-0.10,
+    )
+    searching = calculate_survival_priority_penalty(
+        action_name="MOVE_RIGHT", hunger=0.60, thirst=0.20, energy=0.90,
+        health=1.0, threshold=0.35, base=0.05, scale=0.25, cap=0.60,
+        movement_has_known_target=False, resource_progress=0.0,
+    )
+    assert closer == 0.0
+    assert wandering > 0.0
+    assert searching == 0.0
+
+
+def test_need_safety_signal_grows_steeply_between_fifty_and_seventy_percent() -> None:
+    settings = dict(
+        hunger_before=0.49, thirst_before=0.20,
+        safe_target=0.50, danger_threshold=0.70,
+        penalty_at_danger=0.30, penalty_cap=0.80, recovery_reward=0.25,
+    )
+    safe = calculate_need_safety_signal(
+        **settings, hunger_after=0.50, thirst_after=0.21
+    )
+    warning = calculate_need_safety_signal(
+        **settings, hunger_after=0.60, thirst_after=0.21
+    )
+    danger = calculate_need_safety_signal(
+        **settings, hunger_after=0.70, thirst_after=0.21
+    )
+    assert safe == 0.0
+    assert warning == pytest.approx(-0.075)
+    assert danger == pytest.approx(-0.30)
+
+
+def test_returning_below_fifty_percent_earns_a_safety_reward() -> None:
+    signal = calculate_need_safety_signal(
+        hunger_before=0.65, thirst_before=0.30,
+        hunger_after=0.16, thirst_after=0.31,
+        safe_target=0.50, danger_threshold=0.70,
+        penalty_at_danger=0.30, penalty_cap=0.80, recovery_reward=0.25,
+    )
+    assert signal == pytest.approx(0.25)
+
+
+def test_survival_priority_penalty_is_visible_in_reward_components() -> None:
+    reward = calculate_reward(
+        ate=False, drank=False, rested=False, invalid=False,
+        reached_needed_resource=False, health_delta=0.0, died=False,
+        repeating=False, survival_priority_penalty=0.30,
+    )
+    assert reward.components["ignored_survival_priority"] == -0.30
+    assert reward.total == pytest.approx(-0.29)
 
 
 def test_need_reward_scales_with_thirst_and_resets_penalty() -> None:
@@ -278,22 +420,46 @@ def test_perception_reports_when_water_is_in_reach() -> None:
     assert perception[water_reach].item() == 1.0
 
 
-def test_brain_v2_prioritizes_needs_at_fifty_percent() -> None:
+def test_brain_v2_starts_planning_before_fifty_percent() -> None:
     config = small_config()
     world = World(config, populate=False)
     agent = Human.create("human_001", 2, 2, config)
     world.agents = [agent]
     agent.hunger = 0.50
-    agent.thirst = 0.49
+    agent.thirst = 0.24
     agent.energy = 0.50
     agent.health = 0.49
     perception = agent.perceive(world)
     assert perception[4:8].tolist() == [1.0, 0.0, 1.0, 1.0]
 
 
+def test_survival_perception_exposes_damage_cause_and_time_margin() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    agent = Human.create("human_001", 2, 2, config)
+    world.agents = [agent]
+    agent.health = 0.25
+    agent.hunger = 1.0
+    agent.thirst = 0.80
+    agent.energy = 0.20
+    agent.last_health_delta = -config.starvation_damage
+    perception = agent.perceive(world)
+    values = {
+        label: perception[index].item()
+        for index, label in enumerate(Human.NEED_LABELS)
+    }
+    assert values["riesgo hambre"] == 1.0
+    assert values["riesgo sed"] == pytest.approx((0.80 - 0.25) / 0.75)
+    assert values["recibiendo daño"] == 1.0
+    assert values["daño reciente"] > 0.0
+    assert values["margen de vida"] == pytest.approx(0.10)
+    assert values["urgencia vital"] == 1.0
+
+
 def test_spatial_memory_keeps_last_seen_water_outside_local_vision() -> None:
     config = small_config()
     config.vision_radius = 1
+    config.resource_sense_radius = 1
     config.spatial_memory_max_age = 10
     world = World(config, populate=False)
     agent = Human.create("human_001", 1, 1, config)
@@ -324,6 +490,59 @@ def test_experience_enters_replay_buffer() -> None:
     buffer.push(experience)
     assert len(buffer) == 1
     assert buffer.sample(1)[0].reward == 1.0
+
+
+def test_replay_preserves_next_action_mask() -> None:
+    buffer = ReplayBuffer(3)
+    mask = torch.tensor([True, False, True, False, True, False, True, False])
+    buffer.push(
+        Experience(torch.zeros(2), 0, 1.0, torch.ones(2), False, mask)
+    )
+    restored = ReplayBuffer(3)
+    restored.load_state_dict(buffer.state_dict(), input_size=2)
+    assert torch.equal(restored.sample(1)[0].next_action_mask, mask)
+
+
+def test_dqn_target_ignores_actions_disabled_by_governor() -> None:
+    config = small_config()
+    agent = Human.create("human_001", 1, 1, config)
+    with torch.no_grad():
+        for parameter in agent.brain.parameters():
+            parameter.zero_()
+        for parameter in agent.trainer.target_brain.parameters():
+            parameter.zero_()
+        agent.trainer.target_brain.action_head.bias[Action.WAIT] = 100.0
+        agent.trainer.target_brain.action_head.bias[Action.MOVE_UP] = 1.0
+    mask = torch.tensor([True, False, False, False, False, False, False, False])
+    state = torch.zeros(Human.INPUT_SIZE)
+    for _ in range(config.human_brain.batch_size):
+        agent.trainer.remember(
+            state, Action.MOVE_UP, 0.0, state.clone(), False, mask
+        )
+    loss = agent.trainer.train_step(force=True)
+    assert loss is not None
+    assert loss < 1.0
+
+
+def test_replay_migration_inserts_new_needs_before_spatial_inputs() -> None:
+    old_state = torch.arange(26, dtype=torch.float32)
+    buffer = ReplayBuffer(3)
+    buffer.load_state_dict(
+        [{
+            "state": old_state,
+            "action": 0,
+            "reward": 1.0,
+            "next_state": old_state + 1,
+            "done": False,
+        }],
+        input_size=33,
+        source_need_input_size=8,
+        target_need_input_size=15,
+    )
+    migrated = buffer.sample(1)[0].state
+    assert torch.equal(migrated[:8], old_state[:8])
+    assert torch.equal(migrated[8:15], torch.zeros(7))
+    assert torch.equal(migrated[15:], old_state[8:])
 
 
 def test_replay_sampling_reuses_rare_positive_experience() -> None:
@@ -429,9 +648,17 @@ def test_reward_migration_preserves_weights_but_resets_learning_state(
     assert agent.trainer.train_step(force=True) is not None
     agent.decision_steps = 20_000
     checkpoint_dir = tmp_path / "experiment_001" / "run_001"
+    old_horde = ReplayBuffer(10)
+    old_horde.push(
+        Experience(
+            torch.zeros(Human.INPUT_SIZE), 0, 1.0,
+            torch.ones(Human.INPUT_SIZE), False,
+        )
+    )
     save_run_checkpoints(
         [agent], checkpoint_dir, 1, 1, 42, old_config, None,
         {agent.id: model_hash(agent)},
+        horde_replay_buffers={"human": old_horde, "animal": ReplayBuffer(10)},
     )
     probe = torch.randn(Human.INPUT_SIZE)
     expected = agent.brain(probe.unsqueeze(0)).detach()
@@ -449,6 +676,14 @@ def test_reward_migration_preserves_weights_but_resets_learning_state(
     restored.choose_action(torch.zeros(Human.INPUT_SIZE))
     assert restored.last_epsilon == restored.exploration_epsilon
     assert 0.01 <= restored.last_epsilon <= 0.50
+    migrated_world = World(new_config, populate=False)
+    migrated_world.agents = [restored]
+    migrated_engine = SimulationEngine(
+        migrated_world, new_config, 1, 2, 43, tmp_path,
+        source_checkpoint=checkpoint_dir,
+        learning_state_resets=[restored.id],
+    )
+    assert len(migrated_engine.horde_replay_buffers["human"]) == 0
 
 
 def test_invalid_shape_and_out_of_bounds_are_detected() -> None:
@@ -544,6 +779,116 @@ def test_web_can_create_configured_population_and_brains(tmp_path: Path) -> None
         assert received[0].animal_brain.hidden_sizes == [16, 32, 32]
         controller.control("step")
         assert not controller.state()["can_configure_experiment"]
+    finally:
+        controller.close()
+
+
+def test_brb_starts_new_population_from_champion_weights_only(tmp_path: Path) -> None:
+    source_config = small_config()
+    source_config.num_ticks = 1
+    source_config.generate_plots = False
+    source_config.compact_console = True
+    source_engine = SimulationEngine(
+        World(source_config), source_config, 1, 1, 42, tmp_path
+    )
+    source_engine.run()
+
+    public = brb_public_summary(tmp_path)
+    assert public is not None
+    assert public["experiment_id"] == 1
+    registry, payloads = load_brb_payloads(tmp_path)
+
+    target_config = deepcopy(source_config)
+    target_config.num_humans = 3
+    target_config.num_animals = 2
+    target_config.human_brain.hidden_sizes = [8, 16, 16]
+    target_config.animal_brain.hidden_sizes = [8, 16, 16]
+    engine = build_brb_engine(tmp_path, target_config, seed=43)
+
+    assert engine.experiment_id == 2
+    assert engine.run_number == 1
+    assert engine.brb_source == registry["source_checkpoint"]
+    assert len(engine.world.agents) == 5
+    assert engine.horde_replay_buffers["human"].state_dict() == []
+    assert all(len(agent.trainer.replay_buffer) == 0 for agent in engine.world.agents)
+    assert all(not agent.trainer.optimizer.state for agent in engine.world.agents)
+    assert set(engine.brb_parents) == {agent.id for agent in engine.world.agents}
+
+    source_human = payloads["human"][0]
+    cloned_human = next(
+        agent for agent in engine.world.agents if agent.agent_type == "human"
+    )
+    source_brain = AgentBrain(
+        input_size=source_human["architecture"]["input_size"],
+        hidden_sizes=source_human["architecture"]["hidden_sizes"],
+        output_size=source_human["architecture"]["output_size"],
+        need_input_size=source_human["architecture"]["need_input_size"],
+    )
+    source_brain.load_state_dict(source_human["model_state_dict"])
+    probe = torch.linspace(0, 1, Human.INPUT_SIZE)
+    assert torch.allclose(source_brain(probe), cloned_human.brain(probe), atol=1e-6)
+
+
+def test_brb_score_prioritizes_a_completed_run_with_human_survivors() -> None:
+    def summary(reason: str, final_humans: int, mean_survival: float) -> dict[str, object]:
+        return {
+            "termination_reason": reason,
+            "initial_humans": 5,
+            "final_humans": final_humans,
+            "by_type": {"human": {
+                "mean_survival": mean_survival,
+                "individual_survival": {f"human_{index}": int(mean_survival) for index in range(5)},
+                "brain_selected_drinks": 10,
+                "successful_meals": 10,
+                "ignored_survival_priority_actions": 0,
+            }},
+        }
+
+    completed = summary("tick_limit", final_humans=2, mean_survival=2_000.0)
+    extinct = summary("human_extinction", final_humans=0, mean_survival=4_000.0)
+
+    assert _score(completed) > _score(extinct)
+
+
+def test_web_checkbox_routes_new_experiment_through_brb_factory(
+    tmp_path: Path,
+) -> None:
+    config = small_config()
+    first_engine = SimulationEngine(World(config), config, 1, 1, 42, tmp_path)
+    calls: list[SimulationConfig] = []
+
+    def make_fresh(new_config: SimulationConfig, seed: int) -> SimulationEngine:
+        raise AssertionError("Fresh factory must not run when BRB is selected")
+
+    def make_brb(new_config: SimulationConfig, seed: int) -> SimulationEngine:
+        calls.append(new_config)
+        return SimulationEngine(
+            World(new_config), new_config, 2, 1, seed, tmp_path,
+            brb_source="champion/run_050",
+        )
+
+    controller = WebSimulationController(
+        first_engine,
+        new_engine_factory=make_fresh,
+        brb_engine_factory=make_brb,
+        brb_summary_factory=lambda: {"experiment_id": 1, "run_number": 50},
+    )
+    controller.start()
+    try:
+        state = controller.control(
+            "new_experiment",
+            {
+                "num_humans": 4,
+                "num_animals": 6,
+                "human_brain_width": 16,
+                "animal_brain_width": 16,
+                "use_brb": True,
+            },
+        )
+        assert calls
+        assert state["brb_source"] == "champion/run_050"
+        assert state["brb"] == {"experiment_id": 1, "run_number": 50}
+        assert len(state["agents"]) == 10
     finally:
         controller.close()
 
@@ -727,5 +1072,24 @@ def test_brain_migration_can_add_perception_inputs_without_changing_old_output()
     expected = old_brain(old_input).detach()
     _load_widened_state_dict(new_brain, old_brain.state_dict())
     migrated_input = torch.nn.functional.pad(old_input, (0, 2))
+    actual = new_brain(migrated_input).detach()
+    assert torch.allclose(expected, actual, atol=1e-7, rtol=1e-6)
+
+
+def test_brain_migration_can_insert_survival_inputs_before_spatial_branch() -> None:
+    old_brain = AgentBrain(
+        input_size=26, hidden_sizes=[8, 12, 12], output_size=8,
+        need_input_size=8,
+    )
+    new_brain = AgentBrain(
+        input_size=33, hidden_sizes=[8, 12, 12], output_size=8,
+        need_input_size=15,
+    )
+    old_input = torch.randn(1, 26)
+    expected = old_brain(old_input).detach()
+    _load_widened_state_dict(new_brain, old_brain.state_dict())
+    migrated_input = torch.cat(
+        (old_input[:, :8], torch.zeros(1, 7), old_input[:, 8:]), dim=1
+    )
     actual = new_brain(migrated_input).detach()
     assert torch.allclose(expected, actual, atol=1e-7, rtol=1e-6)

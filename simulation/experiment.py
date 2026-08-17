@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from config import SimulationConfig
-from persistence.checkpoints import load_agents, read_metadata
+from persistence.best_result import load_brb_payloads
+from persistence.checkpoints import (
+    _load_widened_state_dict,
+    load_agents,
+    read_metadata,
+)
 from simulation.engine import RunResult, SimulationEngine, set_seed
 from world.world import World
 
@@ -27,6 +32,60 @@ def build_new_engine(root: Path, config: SimulationConfig, seed: int) -> Simulat
     experiment_id = next_experiment_id(root)
     world = World(config)
     return SimulationEngine(world, config, experiment_id, 1, seed, root)
+
+
+def build_brb_engine(root: Path, config: SimulationConfig, seed: int) -> SimulationEngine:
+    """Start an independent experiment from the current BRB champion weights.
+
+    Physical state, Adam, personal replay and Horde replay intentionally start
+    empty. If the requested population is larger, the strongest saved brains
+    are reused cyclically as parents for the new independent agents.
+    """
+    set_seed(seed)
+    registry, payloads = load_brb_payloads(root)
+    world = World(config)
+    parents: dict[str, str] = {}
+    for agent in world.agents:
+        candidates = payloads[agent.agent_type]
+        if not candidates:
+            raise RuntimeError(f"BRB has no {agent.agent_type} brains")
+        same_type_index = int(agent.id.rsplit("_", 1)[-1]) - 1
+        source = candidates[same_type_index % len(candidates)]
+        _validate_brb_architecture(agent.brain.architecture, source["architecture"])
+        _load_widened_state_dict(agent.brain, source["model_state_dict"])
+        agent.trainer.target_brain.load_state_dict(agent.brain.state_dict(), strict=True)
+        parents[agent.id] = str(source["agent_id"])
+    return SimulationEngine(
+        world,
+        config,
+        next_experiment_id(root),
+        1,
+        seed,
+        root,
+        brb_source=str(registry["source_checkpoint"]),
+        brb_parents=parents,
+    )
+
+
+def _validate_brb_architecture(
+    target: dict[str, object], source: dict[str, object]
+) -> None:
+    source_hidden = [int(value) for value in source["hidden_sizes"]]
+    target_hidden = [int(value) for value in target["hidden_sizes"]]
+    compatible = (
+        int(target["architecture_version"]) == int(source["architecture_version"])
+        and int(target["input_size"]) >= int(source["input_size"])
+        and int(target["need_input_size"]) >= int(source["need_input_size"])
+        and int(target["output_size"]) == int(source["output_size"])
+        and len(target_hidden) == len(source_hidden)
+        and all(new >= old for new, old in zip(target_hidden, source_hidden))
+    )
+    if not compatible:
+        required = max(source_hidden[1], source_hidden[2], source_hidden[0] * 2)
+        raise ValueError(
+            "The selected brain is too small or incompatible with BRB; "
+            f"use width {required} or greater, or disable BRB"
+        )
 
 
 def resume(root: Path, checkpoint_dir: Path, config: SimulationConfig, seed: int) -> RunResult:

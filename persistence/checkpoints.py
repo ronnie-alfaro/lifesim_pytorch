@@ -92,6 +92,15 @@ def save_run_checkpoints(
         "final_model_hashes": final_hashes,
         "horde_replay_file": horde_replay_file,
         "horde_replay_hash": horde_replay_hash,
+        "horde_observation_schema": {
+            agent_type: next(
+                agent.brain.architecture
+                for agent in agents
+                if agent.agent_type == agent_type
+            )
+            for agent_type in ("human", "animal")
+            if any(agent.agent_type == agent_type for agent in agents)
+        },
     }
     (checkpoint_dir / "metadata.json").write_text(
         json.dumps(metadata, indent=2), encoding="utf-8"
@@ -141,6 +150,7 @@ def load_agents(
             config.human_brain if payload["agent_type"] == "human" else config.animal_brain
         )
         old_hidden_sizes = list(architecture["hidden_sizes"])
+        old_need_input = int(architecture.get("need_input_size", 0))
         configured_hidden_sizes = list(configured_brain.hidden_sizes)
         if len(old_hidden_sizes) == len(configured_hidden_sizes):
             hidden_sizes = [
@@ -167,7 +177,8 @@ def load_agents(
         )
         if (
             architecture["input_size"] > expected_input
-            or architecture.get("need_input_size") != expected_need_input
+            or old_need_input > expected_need_input
+            or old_need_input <= 0
             or architecture["output_size"] != 8
         ):
             raise CheckpointError(f"Incompatible architecture in {filename}: {architecture}")
@@ -183,6 +194,7 @@ def load_agents(
         migrated = (
             hidden_sizes != old_hidden_sizes
             or architecture["input_size"] != expected_input
+            or old_need_input != expected_need_input
         )
         try:
             if migrated:
@@ -201,7 +213,9 @@ def load_agents(
                 agent.trainer.optimizer.load_state_dict(payload["optimizer_state_dict"])
             if "replay_buffer" in payload and not reward_changed:
                 agent.trainer.replay_buffer.load_state_dict(
-                    payload["replay_buffer"], expected_input
+                    payload["replay_buffer"], expected_input,
+                    source_need_input_size=old_need_input,
+                    target_need_input_size=expected_need_input,
                 )
             if reward_changed:
                 agent.trainer.remembered_steps = 0
@@ -236,7 +250,10 @@ def load_agents(
 
 def load_horde_replay_state(
     checkpoint_dir: Path,
-) -> dict[str, list[dict[str, object]]] | None:
+) -> tuple[
+    dict[str, list[dict[str, object]]],
+    dict[str, dict[str, object]],
+] | None:
     """Load and integrity-check the persisted species-wide replay, if present."""
     metadata = read_metadata(checkpoint_dir)
     filename = metadata.get("horde_replay_file")
@@ -255,7 +272,19 @@ def load_horde_replay_state(
     for agent_type in ("human", "animal"):
         if agent_type not in payload or not isinstance(payload[agent_type], list):
             raise CheckpointError(f"Horde replay is missing {agent_type} experiences")
-    return payload
+    schemas = metadata.get("horde_observation_schema")
+    if not isinstance(schemas, dict):
+        schemas = {}
+        for filename in metadata.get("agent_files", []):
+            agent_payload = torch.load(
+                checkpoint_dir / filename, map_location="cpu", weights_only=False
+            )
+            agent_type = str(agent_payload.get("agent_type"))
+            if agent_type not in schemas:
+                architecture = agent_payload.get("architecture")
+                if isinstance(architecture, dict):
+                    schemas[agent_type] = architecture
+    return payload, schemas
 
 
 def _load_widened_state_dict(

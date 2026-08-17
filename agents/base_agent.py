@@ -52,15 +52,79 @@ class BaseAgent:
         self.last_epsilon = self.exploration_epsilon
         self.last_was_exploration = True
         self.last_q_values: list[float] = [0.0 for _ in Action]
+        self.last_brain_preferred_action = Action.WAIT.name
+        self.last_governor_override = False
+        self.last_allowed_actions = [action.name for action in Action]
         self.decision_steps = 0
         self.unnecessary_need_streaks = {"EAT": 0, "DRINK": 0, "REST": 0}
         self.spatial_memory = SpatialMemory()
         self.last_brain_activations: dict[str, list[float]] = {}
+        self.last_health_delta = 0.0
 
     def perceive(self, world: "World") -> torch.Tensor:
         raise NotImplementedError
 
-    def choose_action(self, state: torch.Tensor, global_step: int | None = None) -> int:
+    def need_observation(self) -> list[float]:
+        """Normalized survival signals used by Brain v2's need branch."""
+        energy_need = 1.0 - self.energy
+        health_need = 1.0 - self.health
+        threshold = self.config.priority_need_threshold
+
+        def risk(value: float) -> float:
+            return max(0.0, min(1.0, (value - threshold) / (1.0 - threshold)))
+
+        hunger_risk = risk(self.hunger)
+        thirst_risk = risk(self.thirst)
+        exhaustion_risk = risk(energy_need)
+        damage_per_tick = 0.0
+        if self.hunger >= 1.0:
+            damage_per_tick += self.config.starvation_damage
+        if self.thirst >= 1.0:
+            damage_per_tick += self.config.dehydration_damage
+        if self.energy <= 0.0:
+            damage_per_tick += self.config.starvation_damage / 2
+        taking_damage = float(damage_per_tick > 0.0)
+        life_margin = (
+            1.0
+            if damage_per_tick == 0.0
+            else min(1.0, self.health / damage_per_tick / 100.0)
+        )
+        maximum_damage = (
+            self.config.starvation_damage
+            + self.config.dehydration_damage
+            + self.config.starvation_damage / 2
+        )
+        recent_health_loss = min(
+            1.0, max(0.0, -self.last_health_delta) / max(1e-9, maximum_damage)
+        )
+        survival_urgency = max(
+            self.hunger, self.thirst, energy_need, health_need,
+            hunger_risk, thirst_risk, exhaustion_risk,
+        )
+        return [
+            self.hunger,
+            self.thirst,
+            energy_need,
+            health_need,
+            float(self.hunger >= threshold),
+            float(self.thirst >= threshold),
+            float(energy_need >= threshold),
+            float(health_need >= threshold),
+            hunger_risk,
+            thirst_risk,
+            exhaustion_risk,
+            taking_damage,
+            recent_health_loss,
+            life_margin,
+            survival_urgency,
+        ]
+
+    def choose_action(
+        self,
+        state: torch.Tensor,
+        global_step: int | None = None,
+        action_mask: list[bool] | None = None,
+    ) -> int:
         """epsilon-greedy: the non-random branch is the brain forward pass."""
         from world.grid import Action
 
@@ -73,16 +137,28 @@ class BaseAgent:
                 state.unsqueeze(0)
             )
             q_values = q_batch.squeeze(0)
+        if action_mask is None:
+            action_mask = [True for _ in Action]
+        if len(action_mask) != len(Action) or not any(action_mask):
+            raise ValueError("Action mask must allow at least one valid action")
+        allowed_indices = [index for index, allowed in enumerate(action_mask) if allowed]
+        preferred_index = int(q_values.argmax().item())
         exploring = random.random() < epsilon
         if exploring:
-            action_index = random.randrange(len(Action))
+            action_index = random.choice(allowed_indices)
         else:
-            action_index = int(q_values.argmax().item())
+            masked_q_values = q_values.masked_fill(
+                ~torch.tensor(action_mask, dtype=torch.bool), -torch.inf
+            )
+            action_index = int(masked_q_values.argmax().item())
         if not 0 <= action_index < len(Action):
             raise RuntimeError(f"Brain selected invalid action {action_index}")
         self.last_epsilon = epsilon
         self.last_was_exploration = exploring
         self.last_q_values = [float(value) for value in q_values.tolist()]
+        self.last_brain_preferred_action = Action(preferred_index).name
+        self.last_governor_override = preferred_index != action_index
+        self.last_allowed_actions = [Action(index).name for index in allowed_indices]
         self.last_brain_activations = {
             name: [float(value) for value in tensor.squeeze(0).tolist()]
             for name, tensor in activation_batch.items()
@@ -132,7 +208,8 @@ class BaseAgent:
         died = self.health <= 0.0
         if died:
             self.alive = False
-        return self.health - old_health, died
+        self.last_health_delta = self.health - old_health
+        return self.last_health_delta, died
 
     def remember_and_learn(
         self,

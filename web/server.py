@@ -25,10 +25,14 @@ class WebSimulationController:
         ticks_per_second: float = 4.0,
         next_engine_factory: Callable[[Path, SimulationConfig, int], SimulationEngine] | None = None,
         new_engine_factory: Callable[[SimulationConfig, int], SimulationEngine] | None = None,
+        brb_engine_factory: Callable[[SimulationConfig, int], SimulationEngine] | None = None,
+        brb_summary_factory: Callable[[], dict[str, Any] | None] | None = None,
     ) -> None:
         self.engine = engine
         self._next_engine_factory = next_engine_factory
         self._new_engine_factory = new_engine_factory
+        self._brb_engine_factory = brb_engine_factory
+        self._brb_summary_factory = brb_summary_factory
         self.ticks_per_second = ticks_per_second
         self.status = "paused"
         self.error: str | None = None
@@ -97,6 +101,11 @@ class WebSimulationController:
                     )
                 ),
                 "continued_from": self.continued_from,
+                "brb": (
+                    self._brb_summary_factory()
+                    if self._brb_summary_factory is not None
+                    else None
+                ),
             })
             return snapshot
 
@@ -191,6 +200,7 @@ class WebSimulationController:
             animals = int(value["num_animals"])
             human_width = int(value["human_brain_width"])
             animal_width = int(value["animal_brain_width"])
+            use_brb = bool(value.get("use_brb", False))
         except (KeyError, TypeError, ValueError) as error:
             raise ValueError("Incomplete new experiment settings") from error
         if not 1 <= humans <= 30:
@@ -213,6 +223,8 @@ class WebSimulationController:
                 )
             if self._new_engine_factory is None:
                 raise ValueError("This web session cannot create a new experiment")
+            if use_brb and self._brb_engine_factory is None:
+                raise ValueError("No Best Result Brain is available")
             config = deepcopy(self.engine.config)
             config.num_humans = humans
             config.num_animals = animals
@@ -226,7 +238,9 @@ class WebSimulationController:
             previous_status = self.status
             self.status = "preparing"
         try:
-            new_engine = self._new_engine_factory(config, seed)
+            factory = self._brb_engine_factory if use_brb else self._new_engine_factory
+            assert factory is not None
+            new_engine = factory(config, seed)
         except Exception as error:
             with self._lock:
                 self.status = previous_status
@@ -300,7 +314,12 @@ class LifeSimRequestHandler(BaseHTTPRequestHandler):
 
 
 def serve_web(engine: SimulationEngine, host: str, port: int, root: Path) -> None:
-    from simulation.experiment import build_new_engine, build_resumed_engine
+    from persistence.best_result import brb_public_summary
+    from simulation.experiment import (
+        build_brb_engine,
+        build_new_engine,
+        build_resumed_engine,
+    )
 
     def next_engine_factory(
         checkpoint_dir: Path, config_object: SimulationConfig, seed: int
@@ -312,10 +331,17 @@ def serve_web(engine: SimulationEngine, host: str, port: int, root: Path) -> Non
     ) -> SimulationEngine:
         return build_new_engine(root, config_object, seed)
 
+    def brb_engine_factory(
+        config_object: SimulationConfig, seed: int
+    ) -> SimulationEngine:
+        return build_brb_engine(root, config_object, seed)
+
     controller = WebSimulationController(
         engine,
         next_engine_factory=next_engine_factory,
         new_engine_factory=new_engine_factory,
+        brb_engine_factory=brb_engine_factory,
+        brb_summary_factory=lambda: brb_public_summary(root),
     )
     static_dir = root / "web" / "static"
     handler_class = type(

@@ -64,6 +64,13 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
 .builder-control span { display: flex; justify-content: space-between; gap: 8px; }
 .builder-control output { color: var(--green); font-variant-numeric: tabular-nums; text-transform: none; }
 .builder-control input { width: 100%; accent-color: var(--orange); }
+.brb-option { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 11px 12px; border: 1px solid #d4d5cc; border-radius: 8px; background: #f3f2eb; cursor: pointer; }
+.brb-option input { margin-top: 2px; accent-color: var(--green); }
+.brb-option span { display: grid; gap: 3px; }
+.brb-option strong { color: var(--green); font-size: 11px; }
+.brb-option small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.brb-option:has(input:checked) { border-color: var(--green); background: #e9eee7; }
+.brb-option:has(input:disabled) { opacity: .55; cursor: not-allowed; }
 .builder-footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 12px; color: var(--muted); font-size: 10px; line-height: 1.4; }
 .builder-footer #architecture-preview { color: var(--green); font-weight: 750; }
 .builder-footer #builder-help { max-width: 520px; text-align: right; }
@@ -74,11 +81,11 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
 .panel-heading, .agent-title, .section-label { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 11px; }
 .legend span { display: flex; align-items: center; gap: 5px; }
-.legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.legend-human { background: var(--orange); }
-.legend-animal { background: var(--green); }
-.legend-food { background: #82994c; border-radius: 2px !important; }
-.legend-water { background: var(--blue); border-radius: 2px !important; }
+.legend i { width: 14px; height: 14px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(23,32,28,.18); }
+.legend-human { background: #ed8a43; border-radius: 50% 50% 3px 3px; }
+.legend-animal { width: 18px !important; height: 10px !important; background: #398358; border-radius: 7px 3px 3px 7px; }
+.legend-food { background: #78a84f; border-radius: 50% 3px 50% 3px; }
+.legend-water { background: linear-gradient(135deg, #287aa8 45%, #83c9df 46% 58%, #287aa8 59%); border-radius: 3px; }
 
 .world {
   display: block;
@@ -87,9 +94,10 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
   margin-top: 16px;
   border: 1px solid #c9c9c0;
   border-radius: 9px;
-  background-color: #e9e8df;
+  background-color: #dfe1cf;
   image-rendering: pixelated;
   cursor: crosshair;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 10px 28px rgba(32,55,40,.09);
 }
 .world-hint { margin-top: 10px; color: var(--muted); font-size: 11px; }
 
@@ -138,8 +146,11 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
 .training-facts span { background: var(--green-soft); color: var(--green); padding: 4px 7px; border-radius: 5px; font-size: 9px; font-weight: 700; }
 .epsilon-explanation { margin: 3px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .brain-section { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
-.neural-lab canvas { display: block; width: 100%; height: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; image-rendering: pixelated; }
-.brain-caption { margin: 7px 2px 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.neural-lab-wide { margin-top: 18px; padding: 20px; overflow: hidden; }
+.neural-lab-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.brain-view-label { color: var(--green); background: var(--green-soft); border: 1px solid #bdd2c4; border-radius: 999px; padding: 7px 11px; font-size: 10px; }
+.neural-lab canvas { display: block; width: 100%; height: auto; margin-top: 16px; border: 1px solid #cfd5cc; border-radius: 11px; background: #eef1e9; }
+.brain-caption { margin: 9px 3px 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .memory-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
 .memory-card { display: grid; gap: 3px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; background: #f1f0e9; font-size: 10px; }
 .memory-card span { color: var(--ink); }
@@ -186,4 +197,6 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
   .button { padding-inline: 7px; font-size: 11px; }
   .builder-heading { display: grid; }
   .builder-controls { grid-template-columns: 1fr; gap: 12px; }
+  .neural-lab-wide { padding: 14px; }
+  .neural-lab-heading { display: grid; }
 }
