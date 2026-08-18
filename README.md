@@ -1,22 +1,44 @@
 # LifeSim v0.1
 
-LifeSim es un simulador de vida artificial en cuadrícula y un laboratorio pequeño para estudiar redes neuronales con PyTorch. Cinco humanos y diez animales intentan sobrevivir buscando comida y agua. Cada individuo posee su propio brain, optimizer e historial personal; los pesos no se comparten, pero Horde permite aprender del replay colectivo de su especie.
+[Español](README_es.md)
 
-La versión 0.1 prioriza un ciclo completo y observable:
+LifeSim is a grid-based artificial-life simulator and a small laboratory for studying neural networks with PyTorch. Five humans and ten animals try to survive by finding food and water. Every individual owns an independent brain, optimizer, and personal history; model weights are never shared, while Horde-inspired collective replay lets agents learn from experiences gathered by their species.
+
+Version 0.1 focuses on a complete, observable cycle:
 
 ```text
 WORLD -> PERCEPTION -> BRAIN -> ACTION -> REWARD -> LEARNING -> CHECKPOINT -> NEXT RUN
 ```
 
-No intenta modelar biología realista. Tampoco requiere Docker, servidores, cuentas ni procesos auxiliares.
+LifeSim is not intended to model realistic biology. It also requires no Docker containers, external servers, accounts, or sidecar processes.
 
-## Requisitos e instalación
+## Screenshots
 
-- Python 3.12 o posterior
-- PyTorch, NumPy, Pandas y Matplotlib
-- pytest para desarrollo
+### Running cycle
 
-Con `venv` y pip:
+The complete web laboratory during an active training cycle, including experiment controls, the living grid, group statistics, and the selected-agent panel.
+
+![LifeSim running a training cycle](docs/images/running-cycle.png)
+
+### Brain v2
+
+The live neural-decision view exposes the need and spatial-memory encoders, their fusion layer, all eight Q-values, and the action selected by the brain.
+
+![Brain v2 live neural decision visualization](docs/images/brain-v2.png)
+
+### Living world
+
+The 60×40 world contains humans, animals, clustered food and water, and obstacles. Agents perceive and act in this same grid during training.
+
+![LifeSim living grid world](docs/images/world-grid.png)
+
+## Requirements and installation
+
+- Python 3.12 or newer
+- PyTorch, NumPy, Pandas, and Matplotlib
+- pytest for development
+
+Using `venv` and pip:
 
 ```bash
 python3.12 -m venv .venv
@@ -24,40 +46,40 @@ source .venv/bin/activate
 pip install -e '.[dev]'
 ```
 
-Con `uv`:
+Using `uv`:
 
 ```bash
 uv sync --extra dev
 ```
 
-## Ejecutar
+## Running LifeSim
 
-### Laboratorio web interactivo
+### Interactive web laboratory
 
-La forma recomendada de observar la simulación es:
+The recommended way to observe the simulation is:
 
 ```bash
 python main.py --new --web --seed 42
 ```
 
-Después abre `http://127.0.0.1:8765`. La simulación comienza pausada para no perder los primeros ticks. La interfaz permite:
+Then open `http://127.0.0.1:8765`. The simulation starts paused so the first ticks are not missed. The interface lets you:
 
-- iniciar, pausar o avanzar exactamente un tick;
-- cambiar la velocidad entre 1 y 30 ticks por segundo;
-- crear un experimento con 1–30 humanos y 1–50 animales mediante sliders;
-- ajustar la anchura de los brains humanos y animales entre 8 y 64 neuronas;
-- iniciar un experimento desde el **Best Result Brain (BRB)** mediante un checkbox;
-- recorrer una matriz Canvas de 60×40 campos, renderizada internamente a 960×640 para conservar pixel art nítido dentro del mismo espacio visual;
-- distinguir humanos verticales naranjas, animales cuadrúpedos horizontales, plantas con frutos, agua animada visualmente por ondas y obstáculos de roca;
-- ver por defecto estadísticas agregadas de todos los humanos o todos los animales;
-- seleccionar un agente en el mundo para aislar únicamente sus datos;
-- observar debajo del mundo un diagrama Brain v2 de 1320×520: dos ramas —necesidades y memoria espacial—, conexiones cuya intensidad sigue la señal, fusión, ocho Q-values etiquetados y acción elegida;
-- seguir la fuerza media de sus pesos y el cambio desde la lectura anterior;
-- distinguir exploración aleatoria de una acción seleccionada por el brain;
-- ver crecer el replay personal y el Horde replay colectivo, junto con cada actualización real de pesos y su loss;
-- terminar normalmente y generar los mismos checkpoints, CSV y gráficos.
+- play, pause, or advance exactly one tick;
+- change the speed from 1 to 30 ticks per second;
+- create experiments with 1–30 humans and 1–50 animals;
+- adjust human and animal brain widths from 8 to 64 neurons;
+- start an experiment from the **Best Result Brain (BRB)**;
+- explore a 60×40 Canvas grid rendered internally at 960×640 for crisp pixel art;
+- distinguish orange upright humans, horizontal quadruped animals, fruit-bearing plants, animated water, and rock obstacles;
+- view aggregate statistics for all humans or all animals by default;
+- select one agent in the world to isolate its data;
+- inspect a 1320×520 Brain v2 diagram with need and spatial-memory branches, signal-weighted connections, fusion, eight labeled Q-values, and the selected action;
+- track mean weight strength and its change since the previous reading;
+- distinguish random exploration from a brain-selected action;
+- watch personal replay and species-wide Horde replay grow alongside real weight updates and loss;
+- finish normally and generate the same checkpoints, CSV files, and plots as console mode.
 
-Para visualizar un run que parte de conocimiento anterior:
+To observe a run initialized from earlier knowledge:
 
 ```bash
 python main.py --web \
@@ -65,73 +87,73 @@ python main.py --web \
   --seed 43
 ```
 
-La web usa el servidor HTTP incluido en Python y JavaScript/CSS sin frameworks ni CDNs. No necesita Node, Docker ni servicios externos. El navegador consulta el estado del mismo `SimulationEngine.step()` utilizado por consola: las acciones visibles son exactamente las experiencias que entran al entrenamiento.
+The web mode uses Python's built-in HTTP server and framework-free JavaScript/CSS with no CDNs. It needs no Node.js, Docker, or external services. The browser reads state from the same `SimulationEngine.step()` used in console mode, so the visible actions are the exact experiences used for training.
 
-El run se detiene inmediatamente si muere el último humano. En ese tick se guardan normalmente los brains, métricas y gráficos. La consola y la web muestran entonces:
+A run stops immediately when the last human dies. At that tick, LifeSim still saves brains, metrics, and plots. The console and web summary report:
 
-- humanos y animales al inicio y al final;
-- reward medio del primer y último 20%;
-- loss del primer y último 20%;
-- supervivencia media y acción más frecuente;
-- gráfica comparativa del tick del último humano y la supervivencia media frente al run anterior;
-- una sección **¿Qué aprendieron?** que explica los cambios con palabras sencillas y evita afirmar aprendizaje cuando los números no lo demuestran.
+- starting and final human and animal populations;
+- mean reward over the first and last 20%;
+- mean loss over the first and last 20%;
+- mean survival and the most frequent action;
+- a comparison of the last-human tick and mean survival against the previous run;
+- a **What did they learn?** section that explains changes plainly and avoids claiming learning when the measurements do not support it.
 
-Cuando aparece el resumen, el botón **↻ Siguiente ciclo** situado en la barra superior se activa. No hace falta cerrar ni reiniciar el servidor: LifeSim guarda el run, reconstruye todos los brains desde ese checkpoint, verifica que sus pesos iniciales sean exactamente los pesos finales anteriores, crea un mundo nuevo, incrementa la seed y comienza el siguiente run. El resumen siguiente incluirá automáticamente la comparación gráfica entre ambos ciclos.
+When the summary appears, the **↻ Next cycle** button becomes available. LifeSim saves the run, rebuilds every brain from that checkpoint, verifies that the new initial weights exactly match the previous final weights, creates a new world, increments the seed, and starts the next run without restarting the server. The next summary automatically includes a comparison between both cycles.
 
-El panel **Nuevo experimento** permite elegir población y capacidad neuronal antes del primer tick o después de finalizar un run. El control de anchura dimensiona los codificadores y la capa de fusión de Brain v2. Sin marcar BRB, **Crear experimento** comienza con brains nuevos; **Siguiente ciclo** conserva la población, arquitectura, pesos, optimizer y replay aprendidos en la cadena actual. Los controles quedan bloqueados durante un run para evitar descartar entrenamiento accidentalmente. Cada agente continúa teniendo un modelo, optimizer y replay independientes, por lo que aumentar población y anchura incrementa el uso de CPU y memoria.
+The **New experiment** panel controls population and neural capacity before the first tick or after a run finishes. Brain width scales the encoders and fusion layer in Brain v2. Without BRB, **Create experiment** starts with new brains; **Next cycle** preserves the current chain's population, architecture, weights, optimizer state, and replay. Controls are locked during a run to prevent accidental loss of training. Each agent still owns a separate model, optimizer, and personal replay, so larger populations and wider networks use more CPU and memory.
 
 ### Best Result Brain (BRB)
 
-Al terminar cada run compatible, LifeSim compara el rendimiento del grupo humano con el campeón guardado. El contrato de puntuación BRB v2 prioriza, en este orden: completar el límite de ticks con al menos un humano vivo, proporción de humanos que completaron el ciclo, número absoluto de supervivientes, mediana individual, supervivencia media, bebidas elegidas por el brain, comidas y, finalmente, menos prioridades vitales ignoradas. Así, un run largo que termina en extinción no desplaza a uno que realmente alcanza el horizonte experimental. Los runs interrumpidos tampoco pueden ser campeones.
+After every compatible completed run, LifeSim compares human-group performance with the stored champion. BRB score contract v2 prioritizes, in order: reaching the tick limit with at least one human alive, the proportion of humans completing the cycle, absolute survivor count, median individual survival, mean survival, brain-selected drinks, successful meals, and finally fewer ignored survival priorities. A long run ending in extinction therefore cannot replace one that actually reaches the experimental horizon. Interrupted runs are also ineligible.
 
-El baseline incluido actualmente es **experimento 033, run 001, seed 42**: alcanzó 5000 ticks con 2/5 humanos y 2/10 animales vivos. Sus pesos y arquitecturas son el BRB disponible para iniciar experimentos nuevos. Un resultado compatible solo lo reemplaza si su vector de supervivencia es estrictamente mejor; cambiar reward o versión de arquitectura inicia un contrato de aprendizaje distinto y reinicia Adam, target y replay cuando corresponde.
+The champion currently bundled with the repository is **experiment 033, run 001, seed 42**. It reached 5,000 ticks with 2/5 humans and 2/10 animals alive. Its weights and architectures are available as the BRB baseline for new experiments. A compatible result replaces it only when its survival score vector is strictly better. Changes to the reward or architecture version establish a different learning contract and reset Adam, target networks, and replay when required.
 
-Si el nuevo resultado es estrictamente mejor, se crea una copia inmutable de sus pesos en:
+When a result becomes the new champion, LifeSim creates an immutable copy of its weights:
 
 ```text
 checkpoints/best_result_brain/
   registry.json
-  champions/experiment_027_run_050/
+  champions/experiment_033_run_001/
     human_001.pt ... animal_010.pt
 ```
 
-Al marcar **Usar Best Result Brain (BRB)**, el nuevo experimento hereda esos pesos, pero reinicia mundo, estado físico, optimizer Adam, replay personal y replay Horde. Esto permite variar la seed, la población y la capacidad sin confundir la comparación con memoria de entrenamiento anterior. Si se piden más agentes que los guardados, los mejores brains de cada especie se usan cíclicamente como padres; cada copia vuelve a ser un modelo PyTorch independiente y puede divergir al entrenar. La arquitectura puede mantenerse o ensancharse preservando los outputs iniciales, pero no encogerse por debajo del campeón; la web ajusta automáticamente el mínimo de los sliders.
+Selecting **Use Best Result Brain (BRB)** initializes a new experiment from those weights while resetting the world, physical state, Adam optimizers, personal replay, and Horde replay. This makes it possible to vary seed, population, and capacity without confusing the comparison with stored training memory. If more agents are requested than the champion contains, the best brains from each species are reused cyclically as parents; every copy remains an independent PyTorch model and can diverge during training. An architecture may keep the champion's size or widen it while preserving initial outputs, but it cannot be narrowed below the champion. The web interface adjusts slider minimums accordingly.
 
-### Modo consola
+### Console mode
 
-Nuevo experimento reproducible (5,000 ticks por defecto):
+Start a reproducible experiment with the default 5,000-tick limit:
 
 ```bash
 python main.py --new --seed 42
 ```
 
-Para una prueba breve y representación ASCII opcional:
+Run a short test with optional ASCII rendering:
 
 ```bash
 python main.py --new --seed 42 --ticks 200 --status-every 25 --render-every 100
 ```
 
-Continuar el experimento usando exactamente los pesos finales del run anterior:
+Continue an experiment from the exact final weights of an earlier run:
 
 ```bash
 python main.py --resume checkpoints/experiment_001/run_001 --seed 43
 ```
 
-El resume reconstruye cada arquitectura Brain v2, carga pesos, target network, estado de Adam, replay buffer y contadores de exploración/entrenamiento. Después reinicia posición, salud, energía, hambre, sed y el mapa recordado porque el mundo es nuevo. Lo aprendido para usar las necesidades y orientarse sí permanece en los pesos. Brain v2 puede ensanchar sus capas conservando numéricamente sus outputs iniciales; solo en esa migración se reinicia Adam porque sus tensores ya no tienen las mismas dimensiones.
+Resume reconstructs every Brain v2 architecture and restores model weights, target networks, Adam state, replay buffers, and exploration/training counters. Position, health, energy, hunger, thirst, and spatial memory are reset because the physical world is new. Knowledge encoded in the weights remains. Brain v2 layers can be widened while preserving their initial numerical outputs; Adam is reset only for this migration because its tensors no longer match the new dimensions.
 
-Los checkpoints Brain v1 son estructuralmente incompatibles con las ramas de Brain v2. El cargador los rechaza con un error explícito: para comenzar esta etapa usa `--new`. A partir de ese primer run v2, **Siguiente ciclo** y `--resume` continúan normalmente.
+Brain v1 checkpoints are structurally incompatible with Brain v2's two branches. The loader rejects them with an explicit error; use `--new` to start this stage. After the first Brain v2 run, **Next cycle** and `--resume` work normally.
 
-### Entrenamiento continuo solo en texto
+### Continuous text-only training
 
-Para iniciar un experimento y encadenar runs indefinidamente:
+Start an experiment and chain runs indefinitely:
 
 ```bash
 python main.py --new --continuous --text-only --seed 42 --status-every 100
 ```
 
-Cuando muere el último humano —o se alcanza el límite de ticks— se guarda el checkpoint y comienza automáticamente otro mundo con los brains aprendidos. El proceso continúa hasta pulsar `Ctrl+C`. La salida compacta muestra el run, tick, supervivientes, bebidas humanas, epsilon y loss. Al cerrar cada ciclo muestra el tick final, bebidas elegidas por el brain, muertes asociadas a sed crítica y la comparación con el run anterior.
+When the last human dies or the tick limit is reached, LifeSim saves the checkpoint and starts another world with the trained brains. The process continues until `Ctrl+C`. Compact output reports the run, tick, survivors, human drinks, epsilon, and loss. Each completed cycle also reports its final tick, brain-selected drinks, deaths associated with critical thirst, and a comparison with the previous run.
 
-Para continuar una cadena existente:
+Continue an existing chain with:
 
 ```bash
 python main.py \
@@ -139,74 +161,74 @@ python main.py \
   --continuous --text-only --seed 49
 ```
 
-`--text-only` evita el renderer ASCII y la generación de PNG para que los ciclos sean más rápidos. Los checkpoints, `agents.csv`, `summary.csv` y `run_summary.json` sí se conservan. Si se pulsa `Ctrl+C` durante un run que ya avanzó, LifeSim intenta guardar también ese run parcial con la razón `user_interrupt`.
+`--text-only` disables ASCII rendering and PNG generation for faster cycles. Checkpoints, `agents.csv`, `summary.csv`, and `run_summary.json` are still saved. If `Ctrl+C` interrupts a run after it has advanced, LifeSim attempts to save that partial run with the `user_interrupt` reason.
 
-`--debug` imprime los componentes que formaron cada reward. Es verboso. `--ticks`, `--status-every` y `--render-every` son overrides de ejecución útiles para validar. En modo continuo, `--ticks` define el límite de cada ciclo individual, no el límite de toda la cadena.
+`--debug` prints every reward component and is intentionally verbose. `--ticks`, `--status-every`, and `--render-every` are useful runtime overrides. In continuous mode, `--ticks` limits each individual cycle rather than the full chain.
 
-## Arquitectura
-
-```text
-agents/       estado individual, percepción, AgentBrain y clases Human/Animal
-world/        cuadrícula, recursos, acciones y renderer ASCII desacoplado
-learning/     reward observable, replay buffer y entrenamiento DQN-style
-simulation/   engine, métricas y gestión de experimentos/runs
-persistence/  checkpoints reconstruibles e integrity hashes
-analysis/     seis gráficos del run y comparaciones entre runs
-web/          servidor local y laboratorio interactivo
-tests/        comportamiento, aprendizaje y round-trip de checkpoints
-```
-
-### Runtime y concurrencia
-
-LifeSim es local-first y autocontenido. `main.py` crea un único `SimulationEngine`; el modo web añade un `ThreadingHTTPServer` de la biblioteca estándar y un hilo controlador. Un `RLock` protege el cambio de estado entre los requests HTTP y el loop de ticks. No existe un segundo simulador en JavaScript: Canvas solo dibuja snapshots JSON del mismo engine que entrena los brains.
-
-La API local deliberadamente pequeña es:
+## Architecture
 
 ```text
-GET  /api/health   estado básico del controlador
-GET  /api/state    snapshot del mundo, agentes, activaciones y métricas
-POST /api/control  play, pause, step, speed, next_run o new_experiment
+agents/       individual state, perception, AgentBrain, and Human/Animal classes
+world/        grid, resources, actions, and a decoupled ASCII renderer
+learning/     observable rewards, replay buffers, and DQN-style training
+simulation/   engine, metrics, and experiment/run management
+persistence/  reconstructable checkpoints, BRB selection, and integrity hashes
+analysis/     six run plots and cross-run comparisons
+web/          local server and interactive laboratory
+tests/        behavior, learning, BRB, and checkpoint round-trip coverage
 ```
 
-Los assets HTML, CSS y JavaScript se sirven con `Cache-Control: no-store`, de modo que basta refrescar el navegador durante desarrollo. No hay WebSocket: mientras corre, el cliente consulta `/api/state` aproximadamente cada 160 ms. La velocidad visual controla cuántos ticks ejecuta el hilo por segundo; no altera las ecuaciones metabólicas ni el contenido de cada experiencia.
+### Runtime and concurrency
 
-Toda configuración experimental vive en `config.py`. Brain v2 se construye dinámicamente con tres tamaños: `[codificador_necesidades, codificador_espacial, fusión]`. El humano usa por defecto supervivencia `15 → 16`, espacio/memoria `18 → 32`, fusión `48 → 32` y salida `32 → 8`. El animal usa `15 → 12`, `16 → 24`, fusión `36 → 24` y salida `24 → 8`. Se pueden cambiar esos tamaños, learning rate, batch size, gamma, frecuencia de actualización de la target network y capacidad del replay buffer sin tocar el modelo.
+LifeSim is local-first and self-contained. `main.py` creates one `SimulationEngine`; web mode adds a standard-library `ThreadingHTTPServer` and one controller thread. An `RLock` protects state transitions between HTTP requests and the tick loop. JavaScript does not run a second simulation: Canvas only renders JSON snapshots from the same engine that trains the brains.
 
-## Percepción y decisiones
+The deliberately small local API is:
 
-Las observaciones son tensores pequeños y documentados en `agents/human.py` y `agents/animal.py`. Los primeros quince valores forman la rama de supervivencia: hambre, sed, falta de energía y salud, cuatro banderas de prioridad, riesgo progresivo de hambre/sed/agotamiento, daño activo, daño reciente, margen de vida estimado y urgencia vital combinada. El riesgo comienza a crecer desde el 50%, antes de que la salud empiece a caer. El resto forma la rama espacial: memoria de comida y agua, confianza y edad del recuerdo, obstáculos cardinales, posición y recursos al alcance. Los humanos añaden distancia a otros humanos y animales.
+```text
+GET  /api/health   basic controller status
+GET  /api/state    world, agent, activation, and metric snapshot
+POST /api/control  play, pause, step, speed, next_run, or new_experiment
+```
 
-La visión de obstáculos es local (`vision_radius = 6`), pero comida y agua producen un rastro de largo alcance (`resource_sense_radius = 100`). El agente conserva un objetivo espacial y, cuando una necesidad se vuelve prioritaria, mantiene ese destino mientras el recurso siga existiendo. Si otro agente consume la comida, corrige el recuerdo y busca otro objetivo. Esta separación evita que un mapa de 60×40 convierta la búsqueda inicial en azar puro.
+HTML, CSS, and JavaScript assets are served with `Cache-Control: no-store`, so refreshing the browser is enough during development. There is no WebSocket; while running, the client polls `/api/state` about every 160 ms. Visual speed controls how many ticks the controller thread executes per second without changing metabolism or the contents of an experience.
 
-La red produce ocho Q-values, uno por acción: mover en cuatro direcciones, comer, beber, descansar o esperar. Epsilon-greedy decide entre exploración aleatoria y `argmax` de esos Q-values. **Epsilon (ε) es la probabilidad de ignorar temporalmente la decisión favorita del brain y probar una acción aleatoria.** Ya no existe un epsilon global que comience en 100%: es un rasgo individual persistente. Aproximadamente el 90% de cada especie recibe un perfil normal entre `0.01` y `0.15`; una minoría exploradora estable —10%, al menos un individuo— usa `0.50`. Así la mayoría explota lo aprendido y algunos exploradores continúan produciendo experiencias nuevas. En estado seguro el gobernador solo elimina acciones físicamente inválidas; al aparecer una prioridad vital limita temporalmente el conjunto a rutas que preservan la supervivencia. La elección entre las opciones permitidas sigue saliendo de los Q-values del brain.
+All experimental settings live in `config.py`. Brain v2 is built dynamically from three widths: `[need encoder, spatial encoder, fusion]`. Humans default to survival `15 → 16`, space/memory `18 → 32`, fusion `48 → 32`, and output `32 → 8`. Animals use `15 → 12`, `16 → 24`, fusion `36 → 24`, and output `24 → 8`. Layer widths, learning rate, batch size, gamma, target-network update frequency, and replay capacity can be changed without editing the model implementation.
 
-### Aprendizaje colectivo Horde
+## Perception and decisions
 
-Cada humano conserva un brain y optimizer propios, pero entrena muestreando un replay compartido por todos los humanos. Los animales hacen lo mismo en otro replay separado. Cada tick tiene dos fases sincronizadas: primero todos actúan y depositan sus transiciones; después todos los brains hacen su actualización con el Horde ya completo para ese tick. Esto elimina la ventaja artificial del último agente procesado. Si un humano descubre cómo beber, esa transición queda disponible para que todos los brains humanos la estudien; no es necesario que cada individuo descubra el mismo evento por accidente. El checkpoint guarda `horde_replay.pt` con hash de integridad y lo recupera en el ciclo siguiente. El replay personal también se conserva para observabilidad.
+Observations are small tensors documented in `agents/human.py` and `agents/animal.py`. The first fifteen values form the survival branch: hunger, thirst, missing energy, health, four priority flags, progressive hunger/thirst/exhaustion risk, active damage, recent damage, estimated life margin, and combined survival urgency. Risk begins increasing at 50%, before health damage starts. The remaining values form the spatial branch: food and water memory, confidence and memory age, cardinal obstacles, position, and reachable resources. Humans also receive distances to other humans and animals.
 
-Esta primera implementación es **Horde-inspired collective replay**: toma la idea de aprender muchas predicciones o políticas a partir de experiencia compartida, pero todavía no implementa el Horde académico completo basado en múltiples General Value Functions o “demons”. Esa extensión puede añadirse después para que el brain aprenda predicciones separadas como “probabilidad de encontrar agua” o “riesgo de morir en N ticks”.
+Obstacle vision is local (`vision_radius = 6`), while food and water emit a longer-range signal (`resource_sense_radius = 100`). An agent keeps a spatial target and, when a need becomes a priority, retains that destination while the resource exists. If another agent consumes the food, the memory is corrected and a new target is selected. This separation prevents initial search on a 60×40 map from becoming pure chance.
 
-Un agente puede comer o beber desde su celda o desde una celda cardinal adyacente. Cuando tiene una necesidad relevante recibe una señal pequeña por acercarse al recurso urgente y una señal negativa por alejarse; el reward grande continúa reservado para comer o beber realmente. Así se mantiene la decisión en el brain, pero deja de depender de una coincidencia extremadamente rara de posición y acción.
+The network produces eight Q-values: move in four directions, eat, drink, rest, or wait. Epsilon-greedy selection chooses between a random action and the largest Q-value. **Epsilon (ε) is the probability of temporarily ignoring the brain's preferred action and trying a random one.** It is a persistent individual trait rather than a global schedule starting at 100%. About 90% of each species receives a standard profile between `0.01` and `0.15`; a stable explorer minority—10%, with at least one agent—uses `0.50`. Most agents therefore exploit learned behavior while scouts keep supplying novel experiences. In safe states, the survival governor removes only physically invalid actions. When a vital need becomes a priority, it temporarily limits the action set to survival-preserving routes. The brain's Q-values still choose among the allowed actions.
 
-El agua se genera en varios clusters grandes y representa fuentes permanentes: beber no elimina una casilla. La comida también aparece en clusters, sí se consume al comer y vuelve a crecer gradualmente junto a plantas existentes hasta `max_food`. Los centros se distribuyen por máxima separación y cada zona de comida tiene agua cercana, formando hábitats alcanzables en lugar de dejar desiertos aleatorios. Cantidades, número de clusters y probabilidad de rebrote viven en `config.py`.
+### Horde-inspired collective learning
 
-### Reward proporcional a la necesidad
+Every human keeps an independent brain and optimizer but trains from a replay buffer shared by all humans. Animals do the same in a separate species buffer. Each tick has two synchronized phases: all agents act and submit their transitions first, then all brains update using the complete Horde replay for that tick. This removes any artificial advantage for the last agent processed. If one human discovers how to drink, every human brain can train from that transition. Checkpoints persist `horde_replay.pt` with an integrity hash and restore it in the next cycle. Personal replay is retained for observability.
 
-Comer, beber y descansar no entregan un premio fijo. Si hambre, sed o falta de energía están por encima de `need_action_threshold`, el reward es proporcional a la necesidad previa. Por ejemplo, beber con sed `0.80` aporta aproximadamente `+0.80`, mientras beber con sed `0.01` es innecesario y no cuenta como bebida exitosa.
+This is **Horde-inspired collective replay**, not yet the complete academic Horde architecture based on multiple General Value Functions or “demons.” A future extension could add separate learned predictions such as the probability of finding water or the risk of dying within a given number of ticks.
 
-Las acciones innecesarias acumulan una penalización independiente por tipo: `-0.10`, `-0.20`, `-0.30` y así sucesivamente hasta `-1.00`. La racha solo se reinicia cuando esa misma acción vuelve a satisfacer una necesidad real. Esto evita obtener reward infinito bebiendo cada tick de una fuente permanente. El discount factor es `gamma = 0.99` para que consecuencias tardías como morir de hambre influyan más en decisiones anteriores.
+Agents may eat or drink from their own cell or a cardinally adjacent cell. When a need is relevant, approaching the urgent resource earns a small signal and moving away earns a negative signal; the large reward remains reserved for actually eating or drinking. The brain therefore keeps control of the decision without relying on an extremely rare coincidence of position and action.
 
-Reward v5 organiza hambre y sed en tres zonas. Desde 25% comienza la planificación protegida; el objetivo seguro es permanecer en 50% o menos; 70% abre la zona de peligro. Cada tick por encima del 50% tiene un costo cuadrático que llega a `-0.30` al alcanzar 70% y puede crecer hasta `-0.80`. Volver realmente a la zona segura entrega `+0.25`, además del reward proporcional de comer o beber. Como el mapa duplicó sus dimensiones originales pero los agentes siguen avanzando una celda por tick, hambre y sed aumentan `0.005` por tick para conservar el presupuesto metabólico por distancia.
+Water appears in large clusters and acts as a permanent source: drinking does not remove a water cell. Food also appears in clusters, is consumed when eaten, and regrows gradually next to existing plants up to `max_food`. Cluster centers are distributed by maximum separation, and every food region has nearby water, producing reachable habitats instead of random deserts. Counts, cluster numbers, and regrowth probability are configured in `config.py`.
 
-Reward v5 añade un **gobernador de supervivencia** observable. El brain continúa produciendo los ocho Q-values, pero una máscara elimina acciones físicamente imposibles y decisiones incompatibles con supervivencia: no puede elegir `DRINK` sin agua, `EAT` sin comida, atravesar obstáculos ni alejarse de un recurso prioritario recordado. Cerca de recursos el brain elige entre las acciones seguras disponibles; durante exploración, epsilon también muestrea solamente acciones permitidas. La experiencia guarda la máscara del siguiente estado y el target DQN excluye los Q-values imposibles antes de calcular su máximo. La web muestra cuándo el gobernador cambió la preferencia original del brain.
+### Need-proportional rewards
 
-`WAIT` y las acciones que no atienden una necesidad prioritaria reciben `ignored_survival_priority`. Un movimiento de búsqueda sigue permitido cuando el agente no conoce ningún recurso. Si recuerda comida o agua, acercarse recibe un reward que aumenta con la urgencia; alejarse o vagar recibe tanto progreso espacial negativo como penalización por ignorar la prioridad. El cálculo solo usa recursos visibles o recordados, nunca información oculta del mundo.
+Eating, drinking, and resting do not yield fixed rewards. When hunger, thirst, or missing energy exceeds `need_action_threshold`, reward is proportional to the previous need. Drinking at `0.80` thirst therefore yields about `+0.80`, while drinking at `0.01` thirst is unnecessary and does not count as a successful drink.
 
-Los checkpoints guardan `reward_version`. Al cargar por primera vez un checkpoint creado con una función de reward antigua, LifeSim conserva los pesos del brain, pero limpia replay, Adam y target network porque estaban asociados al objetivo anterior. Los perfiles epsilon individuales se mantienen dentro del rango Horde. Los checkpoints posteriores con la misma versión continúan normalmente sin otro reinicio.
+Unnecessary actions accumulate independent penalties by type: `-0.10`, `-0.20`, `-0.30`, and so on up to `-1.00`. A streak resets only when that same action satisfies a real need. This prevents infinite reward from drinking every tick at a permanent water source. The discount factor is `gamma = 0.99`, allowing delayed consequences such as starvation to influence earlier decisions.
 
-El replay sampling reserva inicialmente un 25% del batch para experiencias con reward positivo cuando existen. Esto permite volver a estudiar acciones escasas como beber exitosamente sin programar la decisión dentro del entorno. Los CSV y el resumen separan bebidas elegidas por el brain de bebidas ocurridas durante exploración aleatoria.
+Reward v5 organizes hunger and thirst into three zones. Protected planning begins at 25%, the safe target is 50% or lower, and danger begins at 70%. Every tick above 50% incurs a quadratic cost that reaches `-0.30` at 70% and may rise to `-0.80`. Actually returning to the safe zone awards `+0.25` in addition to the proportional eating or drinking reward. Since the map doubled from its original size while agents still move one cell per tick, hunger and thirst increase by `0.005` per tick to preserve the metabolic distance budget.
 
-El aprendizaje puede seguirse directamente en `learning/trainer.py`:
+Reward v5 also adds an observable **survival governor**. The brain still produces all eight Q-values, but a mask removes physically impossible actions and choices incompatible with survival: agents cannot `DRINK` without water, `EAT` without food, cross obstacles, or move away from a remembered priority resource. Near resources, the brain chooses among safe actions; epsilon exploration also samples only allowed actions. Each experience stores the next-state mask, and the DQN target excludes impossible Q-values before selecting its maximum. The web interface indicates when the governor changed the brain's original preference.
+
+`WAIT` and actions that ignore a priority need receive `ignored_survival_priority`. Search movement remains possible when the agent knows of no resource. When food or water is remembered, approaching it earns a reward that scales with urgency; moving away or wandering receives both negative spatial progress and an ignored-priority penalty. This calculation uses only visible or remembered resources, never hidden world information.
+
+Checkpoints store `reward_version`. The first time a checkpoint from an older reward function is loaded, LifeSim keeps brain weights but clears replay, Adam, and target networks because they were associated with a different objective. Individual epsilon profiles stay within the Horde range. Later checkpoints using the same version continue normally without another reset.
+
+Replay sampling initially reserves 25% of each batch for positive-reward experiences when available. This lets scarce successful actions such as drinking be studied again without programming the decision into the environment. CSV data and summaries distinguish brain-selected drinks from drinks caused by random exploration.
+
+The training path is visible in `learning/trainer.py`:
 
 ```text
 perception tensor
@@ -220,21 +242,22 @@ perception tensor
   -> optimizer.step (weights change here)
 ```
 
-El baseline DQN-style usa una target network independiente que se sincroniza periódicamente para estabilizar el objetivo. El forward de decisiones sigue ocurriendo en el brain individual; la target network se usa únicamente al calcular el valor futuro del batch.
+The DQN-style baseline uses a separate target network synchronized periodically for stability. Decisions still use the individual brain; the target network is used only to calculate future batch values.
 
-Técnicamente, para cada muestra el trainer calcula `Q(s, a)` con `gather`, construye `reward + gamma * max(Q_target(s')) * (1 - done)` dentro de `torch.no_grad()`, excluye con una máscara las acciones imposibles del siguiente estado y minimiza `SmoothL1Loss`. Después ejecuta `zero_grad()`, `backward()`, clipping de gradiente a 10 y `optimizer.step()`. Cada 100 actualizaciones copia los pesos a la target network. Los sanity checks detienen el run ante loss o pesos no finitos.
+For each sample, the trainer obtains `Q(s, a)` with `gather`, builds `reward + gamma * max(Q_target(s')) * (1 - done)` inside `torch.no_grad()`, masks impossible next actions, and minimizes `SmoothL1Loss`. It then runs `zero_grad()`, `backward()`, gradient clipping at 10, and `optimizer.step()`. Every 100 updates, weights are copied to the target network. Sanity checks stop the run if loss or weights become non-finite.
 
-### Límite conocido de ecología v0.1
+### Known ecology limitation in v0.1
 
-El comportamiento neuronal y la capacidad ecológica deben medirse por separado. Con `hunger_per_tick = 0.005` y una comida que reduce hambre en `0.50`, cada agente necesita aproximadamente una comida cada 100 ticks. La población inicial de 15 agentes demanda cerca de `0.15` unidades por tick, mientras el rebrote actual intenta crear como máximo una unidad con probabilidad `0.08` por tick. Por eso el run 033 demuestra supervivencia individual y sirve como BRB, pero también muestra un cuello de botella: la reserva alimentaria se estabiliza solo después de que disminuye la población. La siguiente iteración debe hacer crecer comida por cluster o escalar la producción con la población antes de usar supervivencia grupal como prueba concluyente del aprendizaje.
+Neural behavior and ecological capacity need to be measured separately. With `hunger_per_tick = 0.005` and one meal reducing hunger by `0.50`, each agent needs roughly one food unit every 100 ticks. The initial population of 15 agents demands about `0.15` food units per tick, while current regrowth attempts to create at most one unit with probability `0.08` per tick. Run 033 therefore demonstrates individual survival and provides a useful BRB, but it also exposes a bottleneck: the food reserve stabilizes only after the population falls. A future iteration should regrow food per cluster or scale production with population before group survival is treated as conclusive evidence of learning.
 
-## Persistencia y resultados
+## Persistence and results
 
-Cada run produce:
+Every run produces:
 
 ```text
 checkpoints/experiment_001/run_001/
   human_001.pt ... animal_010.pt
+  horde_replay.pt
   metadata.json
 
 results/experiment_001/run_001/
@@ -249,11 +272,11 @@ results/experiment_001/run_001/
   reward_progression.png
 ```
 
-Los `.pt` contienen arquitectura, pesos, optimizer, identidad y estadísticas. `metadata.json` conserva seed, configuración, fuente del resume y hashes iniciales/finales. Los CSV registran estado individual y agregados por tick.
+Individual `.pt` files contain architecture, weights, optimizer state, personal replay, identity, and statistics; `horde_replay.pt` stores the human and animal collective replay buffers. `metadata.json` records the seed, configuration, resume source, and initial/final integrity hashes. CSV files contain individual state and per-tick aggregates.
 
-Los gráficos muestran recompensa acumulada individual, loss, agentes vivos, distribución de acciones, supervivencia media y progresión suavizada del reward. Desde el segundo run también aparecen `results/experiment_001/comparisons/reward_by_run.png` y `survival_by_run.png`.
+Plots cover cumulative individual reward, loss, living agents, action distribution, mean survival, and smoothed reward progression. Starting with the second run, LifeSim also writes `results/experiment_001/comparisons/reward_by_run.png` and `survival_by_run.png`.
 
-El resumen first/last 20% es evidencia descriptiva para inspección; por sí solo no demuestra aprendizaje significativo.
+The first/last 20% summary is descriptive evidence for inspection; by itself, it does not demonstrate significant learning.
 
 ## Tests
 
@@ -261,4 +284,4 @@ El resumen first/last 20% es evidencia descriptiva para inspección; por sí sol
 pytest
 ```
 
-La suite actual contiene 55 tests y cubre creación del mundo y agentes, ramas y activaciones de Brain v2, perfiles epsilon individuales, Horde replay por especie, prioridad de necesidades, memoria espacial, movimiento, comida, bebida, backpropagation con cambio de pesos, checkpoint y reproducción exacta de outputs, selección BRB, rechazo claro de Brain v1 y sanity checks de shapes y límites.
+The current suite contains 55 tests covering world and agent creation, Brain v2 branches and activations, individual epsilon profiles, species Horde replay, survival priorities, spatial memory, movement, eating, drinking, backpropagation with weight changes, checkpoint output reproduction, BRB selection, explicit Brain v1 rejection, and shape/bounds sanity checks.
