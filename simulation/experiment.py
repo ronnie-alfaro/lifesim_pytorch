@@ -76,7 +76,7 @@ def _validate_brb_architecture(
         int(target["architecture_version"]) == int(source["architecture_version"])
         and int(target["input_size"]) >= int(source["input_size"])
         and int(target["need_input_size"]) >= int(source["need_input_size"])
-        and int(target["output_size"]) == int(source["output_size"])
+        and int(target["output_size"]) >= int(source["output_size"])
         and len(target_hidden) == len(source_hidden)
         and all(new >= old for new, old in zip(target_hidden, source_hidden))
     )
@@ -158,7 +158,8 @@ def build_resumed_engine(
     run_number = max(existing_runs, default=int(metadata["run_number"])) + 1
     set_seed(seed)
     world = World(config)
-    positions = [(agent.x, agent.y) for agent in world.agents]
+    agent_files = metadata.get("agent_files", [])
+    positions = world.random_empty_positions(len(agent_files))
     loaded_agents, loaded_hashes, migrated_agents = load_agents(
         checkpoint_dir, config, positions
     )
@@ -167,6 +168,7 @@ def build_resumed_engine(
         if getattr(agent, "learning_state_reset", False)
     ]
     world.agents = loaded_agents
+    world.initialize_stockpiles()
     expected_hashes = metadata.get("final_model_hashes", {})
     exact_ids = set(loaded_hashes) - set(migrated_agents)
     if any(loaded_hashes[agent_id] != expected_hashes.get(agent_id) for agent_id in exact_ids):
@@ -207,6 +209,7 @@ def _print_continuous_run_end(engine: SimulationEngine) -> None:
         "human_extinction": "murió el último humano",
         "tick_limit": "alcanzó el límite",
         "user_interrupt": "interrumpido por el usuario",
+        "user_cancelled": "cancelado por el usuario",
     }.get(str(summary["termination_reason"]), str(summary["termination_reason"]))
     print(
         f"CYCLE END   | run {engine.run_number:03d} | tick {summary['ticks_executed']} | "

@@ -68,6 +68,7 @@ class SimulationEngine:
         self.last_agent_events: dict[str, dict[str, object]] = {}
         self.learning_summary: dict[str, object] | None = None
         self._result: RunResult | None = None
+        self.pending_maternal_starvation_penalties: dict[str, float] = {}
 
     def run(self) -> RunResult:
         while self.step():
@@ -84,7 +85,14 @@ class SimulationEngine:
         if self._result is not None or self.is_complete:
             return False
         tick = self.current_tick + 1
+        maternal_starvation_penalties = self.pending_maternal_starvation_penalties
+        self.pending_maternal_starvation_penalties = {}
         self.world.update_resources()
+        newborns = self.world.advance_social_dynamics()
+        for baby in newborns:
+            if self.config.horde_learning_enabled:
+                baby.trainer.join_horde(self.horde_replay_buffers[baby.agent_type])
+            self.initial_hashes[baby.id] = model_hash(baby)
         tick_rewards: dict[str, float] = {}
         tick_losses: dict[str, float | None] = {}
         tick_actions: dict[str, str] = {}
@@ -92,12 +100,69 @@ class SimulationEngine:
         events: dict[str, dict[str, object]] = {}
         learning_agents = []
         for agent in list(self.world.living_agents):
+            # A predator acting earlier in this tick may already have killed it.
+            if not agent.alive:
+                continue
+            if agent.dependent_ticks_remaining > 0:
+                health_delta, died = agent.update_biology()
+                if (
+                    died
+                    and agent.mother_id
+                    and agent.cause_of_death
+                    and "starvation" in agent.cause_of_death.split("+")
+                ):
+                    self.pending_maternal_starvation_penalties[agent.mother_id] = (
+                        self.pending_maternal_starvation_penalties.get(
+                            agent.mother_id, 0.0
+                        )
+                        + self.config.maternal_baby_starvation_penalty
+                    )
+                reward = -5.0 if died else 0.01
+                agent.total_reward += reward
+                tick_rewards[agent.id] = reward
+                tick_losses[agent.id] = None
+                tick_actions[agent.id] = "FOLLOW_MOTHER"
+                tick_components[agent.id] = {
+                    "death": -5.0
+                } if died else {"survival": 0.01}
+                events[agent.id] = {
+                    "agent_id": agent.id,
+                    "tick": tick,
+                    "action": "FOLLOW_MOTHER",
+                    "reward": reward,
+                    "reward_components": tick_components[agent.id],
+                    "loss": None,
+                    "trained": False,
+                    "training_steps": agent.trainer.training_steps,
+                    "replay_size": len(agent.trainer.replay_buffer),
+                    "horde_replay_size": len(agent.trainer.learning_replay_buffer),
+                    "epsilon": agent.last_epsilon,
+                    "exploration": False,
+                    "observation": [float(value) for value in agent.perceive(self.world)],
+                    "q_values": agent.last_q_values,
+                    "brain_preferred_action": "FOLLOW_MOTHER",
+                    "governor_override": True,
+                    "governor_mode": "dependent_baby",
+                    "survival_priority": "mother",
+                    "allowed_actions": ["FOLLOW_MOTHER"],
+                    "attack_target": None,
+                    "killed_target": False,
+                }
+                continue
             # WORLD -> PERCEPTION -> BRAIN/ACTION
             state = agent.perceive(self.world)
             hunger_before = agent.hunger
             thirst_before = agent.thirst
             constraints = self.world.action_constraints(agent)
             remembered_target = constraints.target
+            stockpile = self.world.stockpile_for(agent)
+            stockpile_distance_before = (
+                self.world.manhattan_distance(
+                    (agent.x, agent.y), stockpile.position
+                )
+                if agent.carried_food > 0 and stockpile is not None
+                else None
+            )
             distance_before = (
                 self.world.manhattan_distance((agent.x, agent.y), remembered_target)
                 if remembered_target is not None
@@ -110,12 +175,21 @@ class SimulationEngine:
             )
             action_name = Action(action_index).name
             action_result = self.world.execute_action(agent, action_index)
+            dependent_hunger = self.world.max_dependent_hunger(agent)
+            maternal_care_penalty = 0.0
+            if dependent_hunger > self.config.need_safe_target:
+                maternal_care_penalty = (
+                    self.config.maternal_baby_hunger_penalty_scale
+                    * (dependent_hunger - self.config.need_safe_target)
+                    / max(1e-9, 1.0 - self.config.need_safe_target)
+                )
             distance_after = (
                 self.world.manhattan_distance((agent.x, agent.y), remembered_target)
                 if remembered_target is not None
                 else None
             )
             resource_progress = 0.0
+            gathering_progress = 0.0
             movement_actions = {
                 Action.MOVE_UP,
                 Action.MOVE_DOWN,
@@ -132,6 +206,18 @@ class SimulationEngine:
                     resource_progress = 0.05 + 0.10 * urgency
                 elif distance_after > distance_before:
                     resource_progress = -(0.03 + 0.12 * urgency)
+            if (
+                Action(action_index) in movement_actions
+                and stockpile_distance_before is not None
+                and stockpile is not None
+            ):
+                stockpile_distance_after = self.world.manhattan_distance(
+                    (agent.x, agent.y), stockpile.position
+                )
+                if stockpile_distance_after < stockpile_distance_before:
+                    gathering_progress = self.config.gather_progress_reward
+                elif stockpile_distance_after > stockpile_distance_before:
+                    gathering_progress = -self.config.gather_regress_penalty
             survival_priority_penalty = calculate_survival_priority_penalty(
                 action_name=action_name,
                 hunger=hunger_before,
@@ -180,6 +266,29 @@ class SimulationEngine:
                 unnecessary_action_penalty=unnecessary_penalty,
                 survival_priority_penalty=survival_priority_penalty,
                 need_safety_signal=need_safety_signal,
+                attack_reward=(
+                    self.config.predator_attack_reward * action_result.attack_damage
+                    / self.config.predator_attack_damage
+                    if action_result.attacked else 0.0
+                ),
+                kill_reward=(
+                    self.config.predator_kill_reward if action_result.killed else 0.0
+                ),
+                gather_reward=(
+                    self.config.gather_pickup_reward if action_result.gathered else 0.0
+                ),
+                deposit_reward=(
+                    self.config.gather_deposit_reward if action_result.deposited else 0.0
+                ),
+                baby_feed_reward=(
+                    self.config.baby_feed_reward if action_result.fed_baby else 0.0
+                ),
+                mating_reward=(0.20 if action_result.mated else 0.0),
+                gathering_progress=gathering_progress,
+                maternal_care_penalty=maternal_care_penalty,
+                baby_starvation_penalty=maternal_starvation_penalties.get(
+                    agent.id, 0.0
+                ),
             )
             agent.total_reward += reward_result.total
             next_state = agent.perceive(self.world)
@@ -219,6 +328,14 @@ class SimulationEngine:
                 "governor_mode": constraints.mode,
                 "survival_priority": constraints.priority,
                 "allowed_actions": agent.last_allowed_actions,
+                "attack_target": action_result.target_id,
+                "killed_target": action_result.killed,
+                "gathered": action_result.gathered,
+                "deposited": action_result.deposited,
+                "fed_baby": action_result.fed_baby,
+                "mating_target": (
+                    action_result.target_id if action_result.mated else None
+                ),
             }
             if self.config.debug_rewards:
                 print(
@@ -330,7 +447,7 @@ class SimulationEngine:
             "average_human_reward": 0.0,
             "average_animal_reward": 0.0,
             "average_loss": None,
-            "food_remaining": len(self.world.food),
+            "food_remaining": self.world.total_food_supply,
             "water_remaining": len(self.world.water),
             "deaths": 0,
         }
@@ -341,15 +458,28 @@ class SimulationEngine:
             agents.append({
                 "id": agent.id,
                 "type": agent.agent_type,
+                "sex": agent.sex,
+                "predator": agent.predator,
                 "x": agent.x,
                 "y": agent.y,
                 "alive": agent.alive,
+                "cause_of_death": agent.cause_of_death,
+                "carried_food": agent.carried_food,
+                "heart_partner_id": agent.heart_partner_id,
+                "heart_ticks_remaining": agent.heart_ticks_remaining,
+                "pregnant_by_id": agent.pregnant_by_id,
+                "pregnancy_ticks_remaining": agent.pregnancy_ticks_remaining,
+                "mother_id": agent.mother_id,
+                "dependent_ticks_remaining": agent.dependent_ticks_remaining,
+                "dependent_ids": list(agent.dependent_ids),
+                "children_born": agent.children_born,
                 "health": agent.health,
                 "energy": agent.energy,
                 "hunger": agent.hunger,
                 "thirst": agent.thirst,
                 "total_reward": agent.total_reward,
                 "steps_survived": agent.steps_survived,
+                "action_counts": dict(agent.action_counts),
                 "action": event.get("action", "WAITING" if agent.alive else "DEAD"),
                 "reward": event.get("reward", 0.0),
                 "loss": event.get("loss"),
@@ -374,6 +504,8 @@ class SimulationEngine:
                 "allowed_actions": event.get(
                     "allowed_actions", agent.last_allowed_actions
                 ),
+                "attack_target": event.get("attack_target"),
+                "killed_target": event.get("killed_target", False),
                 "reward_components": event.get("reward_components", {}),
                 "brain_architecture": agent.brain.architecture,
                 "brain_activations": agent.last_brain_activations,
@@ -401,6 +533,9 @@ class SimulationEngine:
                 "brain_architecture_version": self.config.brain_architecture_version,
                 "num_humans": self.config.num_humans,
                 "num_animals": self.config.num_animals,
+                "food_per_agent": self.config.food_per_agent,
+                "food_target": self.world.food_target,
+                "predator_fraction": self.config.predator_fraction,
                 "human_hidden_sizes": list(self.config.human_brain.hidden_sizes),
                 "animal_hidden_sizes": list(self.config.animal_brain.hidden_sizes),
                 "horde_learning_enabled": self.config.horde_learning_enabled,
@@ -421,6 +556,15 @@ class SimulationEngine:
                 "food": [list(position) for position in sorted(self.world.food)],
                 "water": [list(position) for position in sorted(self.world.water)],
                 "obstacles": [list(position) for position in sorted(self.world.obstacles)],
+                "stockpiles": [
+                    {
+                        "type": stockpile.agent_type,
+                        "x": stockpile.x,
+                        "y": stockpile.y,
+                        "food": stockpile.food,
+                    }
+                    for stockpile in self.world.stockpiles.values()
+                ],
             },
             "agents": agents,
             "summary": latest_summary,
@@ -608,6 +752,7 @@ class SimulationEngine:
             "human_extinction": "murió el último humano",
             "tick_limit": "se alcanzó el límite de ticks",
             "user_interrupt": "el usuario detuvo la simulación",
+            "user_cancelled": "el usuario canceló el experimento",
         }.get(str(payload["termination_reason"]), str(payload["termination_reason"]))
         print("\nLEARNING SUMMARY (evidencia descriptiva, no prueba definitiva)")
         print(

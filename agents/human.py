@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from agents.base_agent import BaseAgent
+from agents.base_agent import BaseAgent, sex_for_agent_id
 
 
 class Human(BaseAgent):
@@ -22,6 +22,10 @@ class Human(BaseAgent):
         "obstáculo arriba", "obstáculo abajo", "obstáculo izquierda",
         "obstáculo derecha", "x", "y", "comida al alcance", "agua al alcance",
         "dist humano", "dist animal",
+        "comida cargada", "reserva dx", "reserva dy", "comida reserva",
+        "reserva al alcance", "pareja al alcance", "corazón activo",
+        "embarazo", "cuidando bebés", "hambre máxima bebés",
+        "es bebé dependiente",
     ]
     NEED_INPUT_SIZE = len(NEED_LABELS)
     INPUT_SIZE = NEED_INPUT_SIZE + len(SPATIAL_LABELS)
@@ -39,12 +43,16 @@ class Human(BaseAgent):
             float(world.resource_in_reach(self, "water")),
             world.normalized_agent_distance(self, "human"),
             world.normalized_agent_distance(self, "animal"),
+            *self.social_observation(world),
         ]
         return torch.tensor([*needs, *spatial], dtype=torch.float32)
 
     @classmethod
     def create(cls, agent_id: str, x: int, y: int, config: "SimulationConfig") -> "Human":
-        return cls(agent_id, x, y, config, config.human_brain, cls.INPUT_SIZE, "human")
+        return cls(
+            agent_id, x, y, config, config.human_brain, cls.INPUT_SIZE, "human",
+            sex=sex_for_agent_id(agent_id),
+        )
 
 
 from typing import TYPE_CHECKING

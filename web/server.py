@@ -76,6 +76,8 @@ class WebSimulationController:
             self._wake.set()
         elif action == "next_run":
             self._start_next_run()
+        elif action == "cancel":
+            self._cancel_experiment()
         elif action == "new_experiment":
             self._start_new_experiment(value)
         else:
@@ -91,7 +93,15 @@ class WebSimulationController:
                 "error": self.error,
                 "recent_events": list(self._events),
                 "result": self.result,
-                "can_start_next_run": self.status == "completed" and self.result is not None,
+                "can_start_next_run": (
+                    self.status == "completed"
+                    and self.result is not None
+                    and self.engine.termination_reason != "user_cancelled"
+                ),
+                "can_cancel_experiment": (
+                    self.status in {"paused", "running"}
+                    and not self.engine.is_complete
+                ),
                 "can_configure_experiment": (
                     self.status == "completed"
                     or (
@@ -108,6 +118,21 @@ class WebSimulationController:
                 ),
             })
             return snapshot
+
+    def _cancel_experiment(self) -> None:
+        """Stop the current web run, persisting it once at least one tick exists."""
+        with self._lock:
+            if self.status not in {"paused", "running"} or self.engine.is_complete:
+                raise ValueError("Only an active experiment can be cancelled")
+            self.status = "finalizing"
+            self.engine.termination_reason = "user_cancelled"
+            if self.engine.current_tick == 0:
+                # There is no experience, metric row, or changed weight to persist.
+                self._cached_snapshot = self.engine.snapshot()
+                self.result = None
+                self.status = "completed"
+                return
+        self._finalize()
 
     def _loop(self) -> None:
         while not self._stopped.is_set():
@@ -166,7 +191,11 @@ class WebSimulationController:
     def _start_next_run(self) -> None:
         """Rebuild agents from the completed checkpoint and immediately continue."""
         with self._lock:
-            if self.status != "completed" or self.result is None:
+            if (
+                self.status != "completed"
+                or self.result is None
+                or self.engine.termination_reason == "user_cancelled"
+            ):
                 raise ValueError("The current run must finish before starting the next one")
             if self._next_engine_factory is None:
                 raise ValueError("This web session cannot create a subsequent run")

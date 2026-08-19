@@ -22,13 +22,13 @@ The complete web laboratory during an active training cycle, including experimen
 
 ### Brain v2
 
-The live neural-decision view exposes the need and spatial-memory encoders, their fusion layer, all eight Q-values, and the action selected by the brain.
+The live neural-decision view exposes the need and spatial/social-memory encoders, their fusion layer, all eleven Q-values, and the action selected by the brain.
 
 ![Brain v2 live neural decision visualization](docs/images/brain-v2.png)
 
 ### Living world
 
-The 60×40 world contains humans, animals, clustered food and water, and obstacles. Agents perceive and act in this same grid during training.
+The 60×40 world contains humans, animals, distributed food, clustered water, and obstacles. Agents perceive and act in this same grid during training.
 
 ![LifeSim living grid world](docs/images/world-grid.png)
 
@@ -65,15 +65,17 @@ python main.py --new --web --seed 42
 Then open `http://127.0.0.1:8765`. The simulation starts paused so the first ticks are not missed. The interface lets you:
 
 - play, pause, or advance exactly one tick;
+- cancel the active experiment, saving a partial checkpoint when it already advanced;
 - change the speed from 1 to 30 ticks per second;
 - create experiments with 1–30 humans and 1–50 animals;
 - adjust human and animal brain widths from 8 to 64 neurons;
 - start an experiment from the **Best Result Brain (BRB)**;
-- explore a 60×40 Canvas grid rendered internally at 960×640 for crisp pixel art;
-- distinguish orange upright humans, horizontal quadruped animals, fruit-bearing plants, animated water, and rock obstacles;
-- view aggregate statistics for all humans or all animals by default;
-- select one agent in the world to isolate its data;
-- inspect a 1320×520 Brain v2 diagram with need and spatial-memory branches, signal-weighted connections, fusion, eight labeled Q-values, and the selected action;
+- explore a 60×40 Canvas grid rendered internally at 1200×800 for crisp pixel art;
+- distinguish F/M humans, prey, predators, babies, and species-specific corpses, with movement, attack, gathering, eating, drinking, and resting animations;
+- watch procedural grass, flowers, stones, fruit plants, rippling water, paths, and camps that evolve with stored food;
+- view a species dashboard with population, average vitals, dominant activity, reward, and updates when no individual is selected;
+- select an agent to open an RPG-style profile with identity, sex, role, position, age, children born, favorite lifetime activity, current condition, and learning details;
+- inspect a simplified Brain v2 flow directly below the real loop: needs and spatial/social inputs, both encoders, fusion, and eleven labeled Q-values without the former connection mesh;
 - track mean weight strength and its change since the previous reading;
 - distinguish random exploration from a brain-selected action;
 - watch personal replay and species-wide Horde replay grow alongside real weight updates and loss;
@@ -192,15 +194,15 @@ POST /api/control  play, pause, step, speed, next_run, or new_experiment
 
 HTML, CSS, and JavaScript assets are served with `Cache-Control: no-store`, so refreshing the browser is enough during development. There is no WebSocket; while running, the client polls `/api/state` about every 160 ms. Visual speed controls how many ticks the controller thread executes per second without changing metabolism or the contents of an experience.
 
-All experimental settings live in `config.py`. Brain v2 is built dynamically from three widths: `[need encoder, spatial encoder, fusion]`. Humans default to survival `15 → 16`, space/memory `18 → 32`, fusion `48 → 32`, and output `32 → 8`. Animals use `15 → 12`, `16 → 24`, fusion `36 → 24`, and output `24 → 8`. Layer widths, learning rate, batch size, gamma, target-network update frequency, and replay capacity can be changed without editing the model implementation.
+All experimental settings live in `config.py`. Brain v2 is built dynamically from three widths: `[need encoder, spatial encoder, fusion]`. Humans default to survival `15 → 16`, spatial/social state `29 → 32`, fusion `48 → 32`, and output `32 → 11`. Animals use `15 → 12`, `27 → 24`, fusion `36 → 24`, and output `24 → 11`. Layer widths, learning rate, batch size, gamma, target-network update frequency, and replay capacity can be changed without editing the model implementation.
 
 ## Perception and decisions
 
-Observations are small tensors documented in `agents/human.py` and `agents/animal.py`. The first fifteen values form the survival branch: hunger, thirst, missing energy, health, four priority flags, progressive hunger/thirst/exhaustion risk, active damage, recent damage, estimated life margin, and combined survival urgency. Risk begins increasing at 50%, before health damage starts. The remaining values form the spatial branch: food and water memory, confidence and memory age, cardinal obstacles, position, and reachable resources. Humans also receive distances to other humans and animals.
+Observations are small tensors documented in `agents/human.py` and `agents/animal.py`. The first fifteen values form the survival branch: hunger, thirst, missing energy, health, four priority flags, progressive hunger/thirst/exhaustion risk, active damage, recent damage, estimated life margin, and combined survival urgency. Risk begins increasing at 50%, before health damage starts. The remaining values form the spatial/social branch: food and water memory, confidence and memory age, cardinal obstacles, position, reachable resources, carried food, stockpile direction and supply, eligible partners, courtship, pregnancy, care, and dependency. Humans also receive distances to other humans and animals.
 
 Obstacle vision is local (`vision_radius = 6`), while food and water emit a longer-range signal (`resource_sense_radius = 100`). An agent keeps a spatial target and, when a need becomes a priority, retains that destination while the resource exists. If another agent consumes the food, the memory is corrected and a new target is selected. This separation prevents initial search on a 60×40 map from becoming pure chance.
 
-The network produces eight Q-values: move in four directions, eat, drink, rest, or wait. Epsilon-greedy selection chooses between a random action and the largest Q-value. **Epsilon (ε) is the probability of temporarily ignoring the brain's preferred action and trying a random one.** It is a persistent individual trait rather than a global schedule starting at 100%. About 90% of each species receives a standard profile between `0.01` and `0.15`; a stable explorer minority—10%, with at least one agent—uses `0.50`. Most agents therefore exploit learned behavior while scouts keep supplying novel experiences. In safe states, the survival governor removes only physically invalid actions. When a vital need becomes a priority, it temporarily limits the action set to survival-preserving routes. The brain's Q-values still choose among the allowed actions.
+The network produces eleven Q-values: move in four directions, eat, drink, rest, wait, attack, gather, or mate. Epsilon-greedy selection chooses between a random action and the largest Q-value. **Epsilon (ε) is the probability of temporarily ignoring the brain's preferred action and trying a random one.** It is a persistent individual trait rather than a global schedule starting at 100%. About 90% of each species receives a standard profile between `0.01` and `0.15`; a stable explorer minority—10%, with at least one agent—uses `0.50`. Most agents therefore exploit learned behavior while scouts keep supplying novel experiences. Before the danger zone, the governor removes only physically invalid actions or unviable routes, and the brain retains control of meal timing. Once a need reaches 70%, it temporarily limits the action set to survival-preserving choices.
 
 ### Horde-inspired collective learning
 
@@ -210,7 +212,13 @@ This is **Horde-inspired collective replay**, not yet the complete academic Hord
 
 Agents may eat or drink from their own cell or a cardinally adjacent cell. When a need is relevant, approaching the urgent resource earns a small signal and moving away earns a negative signal; the large reward remains reserved for actually eating or drinking. The brain therefore keeps control of the decision without relying on an extremely rare coincidence of position and action.
 
-Water appears in large clusters and acts as a permanent source: drinking does not remove a water cell. Food also appears in clusters, is consumed when eaten, and regrows gradually next to existing plants up to `max_food`. Cluster centers are distributed by maximum separation, and every food region has nearby water, producing reachable habitats instead of random deserts. Counts, cluster numbers, and regrowth probability are configured in `config.py`.
+Water appears in large clusters and acts as a permanent source: drinking does not remove a water cell. Food is consumed, and the world starts with a modest reserve of `food_per_agent` cells per inhabitant (one by default). Each missing cell has only a 3% chance to return per tick, so consumed food takes about 33 ticks to reappear on average. Initial cells and replacements use maximum-separation placement, keeping food distributed across the map. This makes timing meaningful: eating too early wastes part of a shared resource, while waiting too long risks starvation.
+
+When not too hungry, an agent may select `GATHER`: it takes nearby food, carries one unit, and brings it to its species' communal stockpile. Another `GATHER` beside the stockpile deposits the unit. Stored food remains inside the ecological budget—storage does not trigger artificial replenishment—and can later be consumed with `EAT`. These stockpiles are intentionally simple spatial anchors that can evolve into houses and villages later.
+
+Every agent has persistent sex `F` or `M`. A same-species pair may select `MATE` while sharing exactly one cell, provided F is neither pregnant nor caring for babies. A heart remains visible for 50 ticks, followed by 300 pregnancy ticks. Birth produces one baby 70% of the time, two 25%, and three 5%. For 200 ticks each newborn follows only its mother; when she gathers food near a hungry dependent, she feeds the baby first. The baby then gains normal control of its brain. This occupies F for at least 550 ticks per reproductive cycle, limiting explosive population growth. Every newborn owns an independent brain and joins its species Horde replay. F humans are pink and M humans are blue in the web world.
+
+A configurable fraction of animals also receives `predator = true` (30% by default). Predators may select `ATTACK` against another animal or human on their cell or a cardinal neighbor. Humans may also attack, but only a predator animal in reach—never prey or another human. Attacks deal configurable damage, can kill the target, and provide explicit attack/kill reward components for DQN learning.
 
 ### Need-proportional rewards
 
@@ -218,9 +226,9 @@ Eating, drinking, and resting do not yield fixed rewards. When hunger, thirst, o
 
 Unnecessary actions accumulate independent penalties by type: `-0.10`, `-0.20`, `-0.30`, and so on up to `-1.00`. A streak resets only when that same action satisfies a real need. This prevents infinite reward from drinking every tick at a permanent water source. The discount factor is `gamma = 0.99`, allowing delayed consequences such as starvation to influence earlier decisions.
 
-Reward v5 organizes hunger and thirst into three zones. Protected planning begins at 25%, the safe target is 50% or lower, and danger begins at 70%. Every tick above 50% incurs a quadratic cost that reaches `-0.30` at 70% and may rise to `-0.80`. Actually returning to the safe zone awards `+0.25` in addition to the proportional eating or drinking reward. Since the map doubled from its original size while agents still move one cell per tick, hunger and thirst increase by `0.005` per tick to preserve the metabolic distance budget.
+Reward v8 organizes hunger and thirst into three zones. Protected planning begins at 25%, the safe target is 50% or lower, and danger begins at 70%. Every tick above 50% incurs a quadratic cost that reaches `-0.30` at 70% and may rise to `-0.80`. Actually returning to the safe zone awards `+0.25` in addition to the proportional eating or drinking reward. Gathering, depositing, feeding a baby, and mating emit explicit components. A mother observes her dependents' maximum hunger: she receives up to `-1.50` per tick above 50% hunger and another `-5.0` when a dependent baby starves. Feeding lowers hunger before this penalty is calculated, allowing the brain to learn prevention through `GATHER`.
 
-Reward v5 also adds an observable **survival governor**. The brain still produces all eight Q-values, but a mask removes physically impossible actions and choices incompatible with survival: agents cannot `DRINK` without water, `EAT` without food, cross obstacles, or move away from a remembered priority resource. Near resources, the brain chooses among safe actions; epsilon exploration also samples only allowed actions. Each experience stores the next-state mask, and the DQN target excludes impossible Q-values before selecting its maximum. The web interface indicates when the governor changed the brain's original preference.
+Reward v8 retains the observable **survival governor** and adds social and predator rewards. The brain produces eleven Q-values, but a mask removes physically impossible actions: agents cannot `DRINK` without water, `EAT` without food, `GATHER` while hungry or without valid food/cargo, `MATE` without an eligible partner, `ATTACK` without a legal target in reach, or cross obstacles. Between 25% and 70%, the brain decides when to consume; in the danger zone, the governor forces consumption or a safe route toward the remembered resource. Epsilon exploration also samples only allowed actions. Each experience stores the next-state mask, and the DQN target excludes impossible Q-values before selecting its maximum. The web interface indicates when the governor changed the brain's original preference.
 
 `WAIT` and actions that ignore a priority need receive `ignored_survival_priority`. Search movement remains possible when the agent knows of no resource. When food or water is remembered, approaching it earns a reward that scales with urgency; moving away or wandering receives both negative spatial progress and an ignored-priority penalty. This calculation uses only visible or remembered resources, never hidden world information.
 
@@ -248,7 +256,7 @@ For each sample, the trainer obtains `Q(s, a)` with `gather`, builds `reward + g
 
 ### Known ecology limitation in v0.1
 
-Neural behavior and ecological capacity need to be measured separately. With `hunger_per_tick = 0.005` and one meal reducing hunger by `0.50`, each agent needs roughly one food unit every 100 ticks. The initial population of 15 agents demands about `0.15` food units per tick, while current regrowth attempts to create at most one unit with probability `0.08` per tick. Run 033 therefore demonstrates individual survival and provides a useful BRB, but it also exposes a bottleneck: the food reserve stabilizes only after the population falls. A future iteration should regrow food per cluster or scale production with population before group survival is treated as conclusive evidence of learning.
+Neural behavior and ecological capacity still need to be measured separately. Food capacity scales with the population, but gradual replenishment creates temporary scarcity and competition without making sustained survival impossible. Predator pressure, navigation, meal timing, action selection, and learning are all meaningful survival variables in new runs. Historical BRB results were produced under older ecologies and should not be compared directly with these runs.
 
 ## Persistence and results
 
@@ -284,4 +292,4 @@ The first/last 20% summary is descriptive evidence for inspection; by itself, it
 pytest
 ```
 
-The current suite contains 55 tests covering world and agent creation, Brain v2 branches and activations, individual epsilon profiles, species Horde replay, survival priorities, spatial memory, movement, eating, drinking, backpropagation with weight changes, checkpoint output reproduction, BRB selection, explicit Brain v1 rejection, and shape/bounds sanity checks.
+The current suite contains 75 tests covering world and agent creation, proportional distributed food, gradual replenishment, gathering, stockpile progress and deposits, meal timing, F/M sex, mating, pregnancy, litters, baby following, feeding and maternal penalties, birth-expanded populations across cycles, predator attacks and selective human defense, web cancellation, Brain v2 branches and activations, individual epsilon profiles, species Horde replay, survival priorities, spatial/social memory, movement, eating, drinking, backpropagation with weight changes, checkpoint output reproduction, BRB selection, explicit Brain v1 rejection, and shape/bounds sanity checks.

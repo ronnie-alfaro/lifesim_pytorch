@@ -10,6 +10,9 @@ class Action(IntEnum):
     DRINK = 5
     REST = 6
     WAIT = 7
+    ATTACK = 8
+    GATHER = 9
+    MATE = 10
 
 
 MOVEMENT_DELTAS: dict[Action, tuple[int, int]] = {

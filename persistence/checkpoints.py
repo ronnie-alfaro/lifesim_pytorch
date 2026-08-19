@@ -8,11 +8,12 @@ from typing import Any
 
 import torch
 
-from agents.animal import Animal
-from agents.base_agent import BaseAgent
+from agents.animal import Animal, predator_for_agent_id
+from agents.base_agent import BaseAgent, sex_for_agent_id
 from agents.human import Human
 from config import BrainConfig, SimulationConfig
 from learning.replay_buffer import ReplayBuffer
+from world.grid import Action
 
 
 class CheckpointError(RuntimeError):
@@ -46,6 +47,18 @@ def save_run_checkpoints(
             "reward_version": config.reward_version,
             "agent_id": agent.id,
             "agent_type": agent.agent_type,
+            "sex": agent.sex,
+            "predator": agent.predator,
+            "cause_of_death": agent.cause_of_death,
+            "carried_food": agent.carried_food,
+            "heart_partner_id": agent.heart_partner_id,
+            "heart_ticks_remaining": agent.heart_ticks_remaining,
+            "pregnant_by_id": agent.pregnant_by_id,
+            "pregnancy_ticks_remaining": agent.pregnancy_ticks_remaining,
+            "mother_id": agent.mother_id,
+            "dependent_ticks_remaining": agent.dependent_ticks_remaining,
+            "dependent_ids": list(agent.dependent_ids),
+            "children_born": agent.children_born,
             "architecture": agent.brain.architecture,
             "learning_rate": agent.brain_config.learning_rate,
             "model_state_dict": agent.brain.state_dict(),
@@ -179,13 +192,20 @@ def load_agents(
             architecture["input_size"] > expected_input
             or old_need_input > expected_need_input
             or old_need_input <= 0
-            or architecture["output_size"] != 8
+            or architecture["output_size"] > len(Action)
         ):
             raise CheckpointError(f"Incompatible architecture in {filename}: {architecture}")
         agent_class = Human if payload["agent_type"] == "human" else Animal
         agent = agent_class(
             payload["agent_id"], x, y, config, brain_config,
             expected_input, payload["agent_type"],
+            sex=str(payload.get("sex", sex_for_agent_id(payload["agent_id"]))),
+            predator=bool(payload.get(
+                "predator",
+                predator_for_agent_id(payload["agent_id"], config)
+                if payload["agent_type"] == "animal" else False,
+            )),
+            children_born=int(payload.get("children_born", 0)),
         )
         expected_hash = metadata.get("final_model_hashes", {}).get(agent.id)
         source_hash = state_dict_hash(payload["model_state_dict"])
@@ -195,6 +215,7 @@ def load_agents(
             hidden_sizes != old_hidden_sizes
             or architecture["input_size"] != expected_input
             or old_need_input != expected_need_input
+            or architecture["output_size"] != len(Action)
         )
         try:
             if migrated:

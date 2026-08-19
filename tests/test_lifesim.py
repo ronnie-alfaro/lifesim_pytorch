@@ -40,6 +40,7 @@ def small_config() -> SimulationConfig:
         grid_height=6,
         num_humans=1,
         num_animals=1,
+        food_per_agent=1,
         initial_food=2,
         initial_water=2,
         initial_obstacles=1,
@@ -62,6 +63,257 @@ def test_agents_can_be_created_with_independent_brains() -> None:
     assert isinstance(world.agents[0], Human)
     assert isinstance(world.agents[1], Animal)
     assert world.agents[0].brain is not world.agents[1].brain
+
+
+def test_agents_have_balanced_binary_sex_and_animals_have_predator_flags() -> None:
+    config = small_config()
+    config.num_humans = 4
+    config.num_animals = 4
+    config.predator_fraction = 0.5
+    world = World(config)
+    humans = [agent for agent in world.agents if agent.agent_type == "human"]
+    animals = [agent for agent in world.agents if agent.agent_type == "animal"]
+    assert [agent.sex for agent in humans] == ["F", "M", "F", "M"]
+    assert [agent.predator for agent in animals] == [True, True, False, False]
+    assert not any(agent.predator for agent in humans)
+
+
+def test_food_supply_scales_with_inhabitants_and_is_distributed() -> None:
+    config = small_config()
+    config.num_humans = 3
+    config.num_animals = 2
+    config.initial_food = 1
+    config.food_per_agent = 3
+    world = World(config)
+    assert world.food_target == 15
+    assert len(world.food) == 15
+    assert len({x for x, _ in world.food}) > 1
+    assert len({y for _, y in world.food}) > 1
+
+
+def test_predators_can_attack_adjacent_agents() -> None:
+    config = small_config()
+    config.predator_attack_damage = 0.5
+    world = World(config, populate=False)
+    predator = Animal.create("animal_001", 2, 2, config)
+    prey = Human.create("human_001", 3, 2, config)
+    non_predator = Animal.create("animal_002", 4, 3, config)
+    non_predator.predator = False
+    world.agents = [predator, prey, non_predator]
+
+    assert world.action_constraints(predator).mask[Action.ATTACK]
+    first = world.execute_action(predator, Action.ATTACK)
+    second = world.execute_action(predator, Action.ATTACK)
+    assert first.attacked and first.target_id == prey.id
+    assert second.killed and not prey.alive
+    assert prey.cause_of_death == "attack:animal_001"
+
+
+def test_humans_can_attack_predators_but_not_prey_or_other_humans() -> None:
+    config = small_config()
+    config.predator_attack_damage = 0.5
+    world = World(config, populate=False)
+    human = Human.create("human_001", 2, 2, config)
+    predator = Animal.create("animal_001", 3, 2, config)
+    prey = Animal.create("animal_002", 2, 3, config)
+    prey.predator = False
+    neighbour = Human.create("human_002", 1, 2, config)
+    world.agents = [human, predator, prey, neighbour]
+
+    assert world.action_constraints(human).mask[Action.ATTACK]
+    first = world.execute_action(human, Action.ATTACK)
+    second = world.execute_action(human, Action.ATTACK)
+    assert first.target_id == predator.id
+    assert second.killed
+    assert predator.cause_of_death == "attack:human_001"
+    assert not world.action_constraints(human).mask[Action.ATTACK]
+    assert world.execute_action(human, Action.ATTACK).invalid
+
+
+def test_gathering_moves_food_into_a_communal_stockpile() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    human = Human.create("human_001", 2, 2, config)
+    world.agents = [human]
+    world.initialize_stockpiles()
+    world.food.add((3, 2))
+
+    assert world.action_constraints(human).mask[Action.GATHER]
+    gathered = world.execute_action(human, Action.GATHER)
+    assert gathered.gathered
+    assert human.carried_food == 1
+    assert not world.food
+    assert world.total_food_supply == 1
+
+    deposited = world.execute_action(human, Action.GATHER)
+    assert deposited.deposited
+    assert human.carried_food == 0
+    assert world.stockpiles["human"].food == 1
+    assert world.total_food_supply == 1
+
+
+def test_gathering_is_available_only_while_hunger_is_below_limit() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    human = Human.create("human_001", 2, 2, config)
+    world.agents = [human]
+    world.initialize_stockpiles()
+    world.food.add((3, 2))
+    human.hunger = config.gathering_hunger_limit
+    assert not world.action_constraints(human).mask[Action.GATHER]
+
+
+def test_gathering_progress_has_dense_directional_reward() -> None:
+    closer = calculate_reward(
+        ate=False, drank=False, invalid=False, reached_needed_resource=False,
+        health_delta=0.0, died=False, repeating=False,
+        gathering_progress=0.08,
+    )
+    farther = calculate_reward(
+        ate=False, drank=False, invalid=False, reached_needed_resource=False,
+        health_delta=0.0, died=False, repeating=False,
+        gathering_progress=-0.04,
+    )
+    assert closer.components["gathering_progress"] == 0.08
+    assert farther.components["gathering_progress"] == -0.04
+
+
+@pytest.mark.parametrize(
+    ("roll", "expected_babies"), [(0.10, 1), (0.80, 2), (0.98, 3)]
+)
+def test_birth_litter_probabilities_map_to_one_two_or_three_babies(
+    monkeypatch: pytest.MonkeyPatch, roll: float, expected_babies: int
+) -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    mother = Human.create("human_001", 2, 2, config)
+    world.agents = [mother]
+    monkeypatch.setattr("world.world.random.random", lambda: roll)
+    babies = world._give_birth(mother)
+    assert len(babies) == expected_babies
+    assert mother.children_born == expected_babies
+    assert all(baby.mother_id == mother.id for baby in babies)
+    assert all(
+        baby.dependent_ticks_remaining == config.dependent_baby_ticks
+        for baby in babies
+    )
+
+
+def test_mating_respects_full_heart_and_pregnancy_durations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    female = Human.create("human_001", 2, 2, config)
+    male = Human.create("human_002", 2, 2, config)
+    world.agents = [female, male]
+    world.initialize_stockpiles()
+    monkeypatch.setattr("world.world.random.random", lambda: 0.10)
+
+    result = world.execute_action(female, Action.MATE)
+    assert result.mated
+    assert female.heart_ticks_remaining == male.heart_ticks_remaining == 50
+    for remaining in range(config.courtship_ticks - 1, 0, -1):
+        assert not world.advance_social_dynamics()
+        assert female.heart_ticks_remaining == remaining
+    assert not world.advance_social_dynamics()
+    assert female.pregnancy_ticks_remaining == 300
+    assert not world.action_constraints(female).mask[Action.MATE]
+
+    for remaining in range(config.pregnancy_ticks - 1, 0, -1):
+        assert not world.advance_social_dynamics()
+        assert female.pregnancy_ticks_remaining == remaining
+    babies = world.advance_social_dynamics()
+    assert len(babies) == 1
+    assert female.pregnancy_ticks_remaining == 0
+    assert female.dependent_ids == [babies[0].id]
+    assert not world.action_constraints(female).mask[Action.MATE]
+
+
+def test_dependent_baby_follows_mother_and_receives_carried_food(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    mother = Human.create("human_001", 4, 2, config)
+    world.agents = [mother]
+    monkeypatch.setattr("world.world.random.random", lambda: 0.10)
+    baby = world._give_birth(mother)[0]
+    baby.x = 2
+    mother.carried_food = 1
+    newborns = world.advance_social_dynamics()
+    assert not newborns
+    assert (baby.x, baby.y) == (3, 2)
+    assert baby.dependent_ticks_remaining == config.dependent_baby_ticks - 1
+    fed = world.execute_action(mother, Action.GATHER)
+    assert fed.fed_baby
+    assert baby.hunger == pytest.approx(0.0)
+    assert mother.carried_food == 0
+
+
+def test_newborn_brain_joins_species_horde(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = small_config()
+    config.num_ticks = 1
+    config.stop_when_no_humans = False
+    world = World(config, populate=False)
+    mother = Human.create("human_001", 2, 2, config)
+    mother.pregnancy_ticks_remaining = 1
+    world.agents = [mother]
+    world.initialize_stockpiles()
+    engine = SimulationEngine(world, config, 1, 1, 42, tmp_path)
+    monkeypatch.setattr("world.world.random.random", lambda: 0.10)
+    assert engine.step()
+    baby = next(agent for agent in world.agents if agent.id != mother.id)
+    assert baby.dependent_ticks_remaining == config.dependent_baby_ticks
+    assert baby.trainer.horde_replay_buffer is engine.horde_replay_buffers["human"]
+
+
+def test_mother_is_penalized_for_hungry_and_starved_dependent_baby(
+    tmp_path: Path,
+) -> None:
+    config = small_config()
+    config.num_ticks = 3
+    config.stop_when_no_humans = False
+    world = World(config, populate=False)
+    mother = Human.create("human_001", 2, 2, config)
+    baby = Human.create("human_003", 2, 2, config)
+    baby.mother_id = mother.id
+    baby.dependent_ticks_remaining = config.dependent_baby_ticks
+    baby.hunger = 1.0
+    baby.health = 0.01
+    mother.dependent_ids = [baby.id]
+    mother.children_born = 1
+    world.agents = [mother, baby]
+    world.initialize_stockpiles()
+    engine = SimulationEngine(world, config, 1, 1, 42, tmp_path)
+
+    assert engine.step()
+    first_components = engine.last_agent_events[mother.id]["reward_components"]
+    assert first_components["hungry_dependent_baby"] < 0.0
+    assert not baby.alive
+    assert engine.pending_maternal_starvation_penalties[mother.id] == 5.0
+
+    assert engine.step()
+    second_components = engine.last_agent_events[mother.id]["reward_components"]
+    assert second_components["dependent_baby_starved"] == -5.0
+
+
+def test_next_cycle_accepts_population_expanded_by_births(tmp_path: Path) -> None:
+    config = small_config()
+    config.compact_console = True
+    config.generate_plots = False
+    world = World(config)
+    baby = Human.create("human_002", 4, 4, config)
+    world.agents.append(baby)
+    checkpoint_dir = tmp_path / "checkpoints" / "experiment_001" / "run_001"
+    save_run_checkpoints(world.agents, checkpoint_dir, 1, 1, 42, config, None, {})
+    resumed = build_resumed_engine(tmp_path, checkpoint_dir, config, 43)
+    assert len(resumed.world.agents) == 3
+    assert {agent.id for agent in resumed.world.agents} == {
+        "human_001", "human_002", "animal_001"
+    }
 
 
 def test_individual_epsilon_profiles_have_a_small_scout_minority() -> None:
@@ -148,7 +400,7 @@ def test_survival_governor_forces_consumption_when_urgent_resource_is_reachable(
     agent = Human.create("human_001", 2, 2, config)
     world.agents = [agent]
     world.water.add((3, 2))
-    agent.thirst = 0.50
+    agent.thirst = 0.75
     constraints = world.action_constraints(agent)
     assert constraints.mode == "survival"
     assert constraints.priority == "water"
@@ -164,12 +416,25 @@ def test_survival_governor_routes_toward_remembered_resource() -> None:
     agent = Human.create("human_001", 1, 1, config)
     world.agents = [agent]
     world.food.add((5, 1))
-    agent.hunger = 0.50
+    agent.hunger = 0.75
     agent.perceive(world)
     constraints = world.action_constraints(agent)
     assert constraints.target == (5, 1)
     assert constraints.mask[Action.MOVE_RIGHT]
     assert sum(constraints.mask) == 1
+
+
+def test_brain_controls_meal_timing_before_hunger_becomes_dangerous() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    agent = Human.create("human_001", 2, 2, config)
+    world.agents = [agent]
+    world.food.add((3, 2))
+    agent.hunger = 0.50
+    constraints = world.action_constraints(agent)
+    assert constraints.mode == "valid_actions"
+    assert constraints.mask[Action.EAT]
+    assert constraints.mask[Action.WAIT]
 
 
 def test_brain_action_selection_respects_governor_mask() -> None:
@@ -378,14 +643,23 @@ def test_resources_are_populated_in_clusters() -> None:
     )
 
 
-def test_food_regrows_next_to_existing_food() -> None:
+def test_food_reserve_is_replenished_in_distributed_positions() -> None:
     config = small_config()
     config.food_respawn_probability = 1.0
     world = World(config, populate=False)
     world.food.add((3, 3))
     world.update_resources()
     assert len(world.food) == 2
-    assert any(abs(x - 3) + abs(y - 3) == 1 for x, y in world.food)
+    assert any(abs(x - 3) + abs(y - 3) > 1 for x, y in world.food)
+
+
+def test_consumed_food_remains_scarce_until_respawn_succeeds() -> None:
+    config = small_config()
+    config.food_respawn_probability = 0.0
+    world = World(config, populate=False)
+    world.food.add((3, 3))
+    world.update_resources()
+    assert len(world.food) == 1
 
 
 def test_default_world_uses_dense_matrix() -> None:
@@ -513,7 +787,7 @@ def test_dqn_target_ignores_actions_disabled_by_governor() -> None:
             parameter.zero_()
         agent.trainer.target_brain.action_head.bias[Action.WAIT] = 100.0
         agent.trainer.target_brain.action_head.bias[Action.MOVE_UP] = 1.0
-    mask = torch.tensor([True, False, False, False, False, False, False, False])
+    mask = torch.tensor([action is Action.MOVE_UP for action in Action])
     state = torch.zeros(Human.INPUT_SIZE)
     for _ in range(config.human_brain.batch_size):
         agent.trainer.remember(
@@ -589,6 +863,7 @@ def test_checkpoint_round_trip_preserves_outputs(tmp_path: Path) -> None:
         state = torch.zeros(agent.input_size)
         agent.trainer.remember(state, 0, 0.25, state.clone(), False)
         agent.decision_steps = 7
+        agent.children_born = 3
     checkpoint_dir = tmp_path / "checkpoints" / "experiment_001" / "run_001"
     initial_hashes = {agent.id: "initial" for agent in world.agents}
     save_run_checkpoints(world.agents, checkpoint_dir, 1, 1, 42, config, None, initial_hashes)
@@ -606,6 +881,10 @@ def test_checkpoint_round_trip_preserves_outputs(tmp_path: Path) -> None:
         assert torch.equal(expected[agent.id], actual)
         assert len(agent.trainer.replay_buffer) == 1
         assert agent.decision_steps == 7
+        original = next(item for item in world.agents if item.id == agent.id)
+        assert agent.sex == original.sex
+        assert agent.predator == original.predator
+        assert agent.children_born == 3
         assert (checkpoint_dir / f"{agent.id}.pt").is_file()
 
 
@@ -731,6 +1010,8 @@ def test_web_controller_exposes_json_safe_brain_state(tmp_path: Path) -> None:
         assert len(first_agent["q_values"]) == len(Action)
         assert len(first_agent["observation"]) in {Human.INPUT_SIZE, Animal.INPUT_SIZE}
         assert first_agent["replay_size"] == 1
+        assert set(first_agent["action_counts"]) == {action.name for action in Action}
+        assert sum(first_agent["action_counts"].values()) == 1
         assert first_agent["brain_architecture"]["architecture_version"] == 2
         assert first_agent["brain_activations"]["fusion_hidden"]
         assert first_agent["weight_statistics"]
@@ -771,6 +1052,9 @@ def test_web_can_create_configured_population_and_brains(tmp_path: Path) -> None
             "epsilon_scout": 0.5,
             "num_humans": 7,
             "num_animals": 13,
+            "food_per_agent": 1,
+            "food_target": 20,
+            "predator_fraction": 0.3,
             "human_hidden_sizes": [24, 48, 48],
             "animal_hidden_sizes": [16, 32, 32],
         }
@@ -779,6 +1063,51 @@ def test_web_can_create_configured_population_and_brains(tmp_path: Path) -> None
         assert received[0].animal_brain.hidden_sizes == [16, 32, 32]
         controller.control("step")
         assert not controller.state()["can_configure_experiment"]
+    finally:
+        controller.close()
+
+
+def test_web_can_cancel_before_first_tick_without_writing_checkpoint(
+    tmp_path: Path,
+) -> None:
+    config = small_config()
+    engine = SimulationEngine(World(config), config, 1, 1, 42, tmp_path)
+    controller = WebSimulationController(engine)
+    controller.start()
+    try:
+        assert controller.state()["can_cancel_experiment"]
+        state = controller.control("cancel")
+        assert state["status"] == "completed"
+        assert state["termination_reason"] == "user_cancelled"
+        assert state["result"] is None
+        assert state["can_configure_experiment"]
+        assert not state["can_start_next_run"]
+        assert not (tmp_path / "checkpoints").exists()
+    finally:
+        controller.close()
+
+
+def test_web_cancel_saves_an_advanced_run_as_partial_checkpoint(
+    tmp_path: Path,
+) -> None:
+    config = small_config()
+    config.num_ticks = 10
+    config.generate_plots = False
+    engine = SimulationEngine(World(config), config, 2, 1, 43, tmp_path)
+    controller = WebSimulationController(engine)
+    controller.start()
+    try:
+        controller.control("step")
+        state = controller.control("cancel")
+        assert state["status"] == "completed"
+        assert state["tick"] == 1
+        assert state["termination_reason"] == "user_cancelled"
+        assert state["result"] is not None
+        assert state["learning_summary"]["termination_reason"] == "user_cancelled"
+        assert not state["can_start_next_run"]
+        metadata = read_metadata(Path(state["result"]["checkpoint_dir"]))
+        assert metadata["termination_reason"] == "user_cancelled"
+        assert metadata["ticks_executed"] == 1
     finally:
         controller.close()
 
@@ -923,6 +1252,7 @@ def test_run_stops_and_summarizes_when_last_human_dies(tmp_path: Path) -> None:
     assert engine.current_tick == 1
     assert engine.is_complete
     assert engine.termination_reason == "human_extinction"
+    assert human.cause_of_death == "starvation+dehydration"
     assert not engine.step()
 
     result = engine.finalize()
@@ -1074,6 +1404,20 @@ def test_brain_migration_can_add_perception_inputs_without_changing_old_output()
     migrated_input = torch.nn.functional.pad(old_input, (0, 2))
     actual = new_brain(migrated_input).detach()
     assert torch.allclose(expected, actual, atol=1e-7, rtol=1e-6)
+
+
+def test_brain_migration_can_add_attack_output_without_changing_old_outputs() -> None:
+    old_brain = AgentBrain(
+        input_size=10, hidden_sizes=[4, 8, 8], output_size=8, need_input_size=4
+    )
+    new_brain = AgentBrain(
+        input_size=10, hidden_sizes=[4, 8, 8], output_size=9, need_input_size=4
+    )
+    probe = torch.randn(1, 10)
+    expected = old_brain(probe).detach()
+    _load_widened_state_dict(new_brain, old_brain.state_dict())
+    actual = new_brain(probe).detach()
+    assert torch.allclose(expected, actual[:, :8], atol=1e-7, rtol=1e-6)
 
 
 def test_brain_migration_can_insert_survival_inputs_before_spatial_branch() -> None:

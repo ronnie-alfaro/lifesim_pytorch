@@ -16,6 +16,15 @@ def calculate_reward(
     unnecessary_action_penalty: float = 0.0,
     survival_priority_penalty: float = 0.0,
     need_safety_signal: float = 0.0,
+    attack_reward: float = 0.0,
+    kill_reward: float = 0.0,
+    gather_reward: float = 0.0,
+    deposit_reward: float = 0.0,
+    baby_feed_reward: float = 0.0,
+    mating_reward: float = 0.0,
+    gathering_progress: float = 0.0,
+    maternal_care_penalty: float = 0.0,
+    baby_starvation_penalty: float = 0.0,
 ) -> RewardResult:
     """Small, inspectable reward vocabulary; no action policy is encoded here."""
     components: dict[str, float] = {"survival": 0.01}
@@ -35,6 +44,24 @@ def calculate_reward(
         components["unsafe_need_level"] = need_safety_signal
     if reached_needed_resource:
         components["reached_needed_resource"] = 0.2
+    if attack_reward > 0.0:
+        components["predator_attack"] = attack_reward
+    if kill_reward > 0.0:
+        components["predator_kill"] = kill_reward
+    if gather_reward > 0.0:
+        components["gathered_food"] = gather_reward
+    if deposit_reward > 0.0:
+        components["deposited_food"] = deposit_reward
+    if baby_feed_reward > 0.0:
+        components["fed_baby"] = baby_feed_reward
+    if mating_reward > 0.0:
+        components["mated"] = mating_reward
+    if gathering_progress:
+        components["gathering_progress"] = gathering_progress
+    if maternal_care_penalty > 0.0:
+        components["hungry_dependent_baby"] = -maternal_care_penalty
+    if baby_starvation_penalty > 0.0:
+        components["dependent_baby_starved"] = -baby_starvation_penalty
     if resource_progress:
         components["resource_progress"] = resource_progress
     if health_delta > 0:

@@ -27,17 +27,34 @@ class BaseAgent:
     brain_config: "BrainConfig" = field(repr=False)
     input_size: int
     agent_type: str
+    sex: str = "M"
+    predator: bool = False
     age: int = 0
     health: float = 1.0
     energy: float = 1.0
     hunger: float = 0.0
     thirst: float = 0.0
     alive: bool = True
+    cause_of_death: str | None = None
+    carried_food: int = 0
+    heart_partner_id: str | None = None
+    heart_ticks_remaining: int = 0
+    pregnant_by_id: str | None = None
+    pregnancy_ticks_remaining: int = 0
+    mother_id: str | None = None
+    dependent_ticks_remaining: int = 0
+    dependent_ids: list[str] = field(default_factory=list)
+    children_born: int = 0
     total_reward: float = 0.0
     steps_survived: int = 0
 
     def __post_init__(self) -> None:
         from world.grid import Action
+
+        if self.sex not in {"F", "M"}:
+            raise ValueError("Agent sex must be F or M")
+        if self.agent_type != "animal" and self.predator:
+            raise ValueError("Only animals can be predators")
 
         self.brain = AgentBrain(
             self.input_size,
@@ -119,6 +136,30 @@ class BaseAgent:
             survival_urgency,
         ]
 
+    def social_observation(self, world: "World") -> list[float]:
+        """Observable gathering and family state for learned social actions."""
+        stockpile = world.stockpile_for(self)
+        if stockpile is None:
+            stock_dx = stock_dy = stock_food = stock_reach = 0.0
+        else:
+            stock_dx = (stockpile.x - self.x) / max(1, world.width - 1)
+            stock_dy = (stockpile.y - self.y) / max(1, world.height - 1)
+            stock_food = min(1.0, stockpile.food / max(1, len(world.living_agents)))
+            stock_reach = float(world.position_in_reach(self, stockpile.position))
+        return [
+            self.carried_food / max(1, self.config.gather_capacity),
+            stock_dx,
+            stock_dy,
+            stock_food,
+            stock_reach,
+            float(world.mate_target_in_reach(self) is not None),
+            self.heart_ticks_remaining / max(1, self.config.courtship_ticks),
+            self.pregnancy_ticks_remaining / max(1, self.config.pregnancy_ticks),
+            float(bool(self.dependent_ids)),
+            world.max_dependent_hunger(self),
+            float(self.dependent_ticks_remaining > 0),
+        ]
+
     def choose_action(
         self,
         state: torch.Tensor,
@@ -183,7 +224,7 @@ class BaseAgent:
             return "scout", self.config.epsilon_scout
         normal_count = max(1, population - scout_count)
         normal_rank = index - scout_count - 1
-        fraction = normal_rank / max(1, normal_count - 1)
+        fraction = min(1.0, normal_rank / max(1, normal_count - 1))
         epsilon = self.config.epsilon_standard_min + fraction * (
             self.config.epsilon_standard_max - self.config.epsilon_standard_min
         )
@@ -198,16 +239,21 @@ class BaseAgent:
         self.thirst = min(1.0, self.thirst + self.config.thirst_per_tick)
         energy_change = self.config.rest_energy_gain if rested else -self.config.energy_per_tick
         self.energy = min(1.0, max(0.0, self.energy + energy_change))
+        death_causes: list[str] = []
         if self.hunger >= 1.0:
+            death_causes.append("starvation")
             self.health -= self.config.starvation_damage
         if self.thirst >= 1.0:
+            death_causes.append("dehydration")
             self.health -= self.config.dehydration_damage
         if self.energy <= 0.0:
+            death_causes.append("exhaustion")
             self.health -= self.config.starvation_damage / 2
         self.health = max(0.0, min(1.0, self.health))
         died = self.health <= 0.0
         if died:
             self.alive = False
+            self.cause_of_death = "+".join(death_causes) or "unknown"
         self.last_health_delta = self.health - old_health
         return self.last_health_delta, died
 
@@ -243,3 +289,12 @@ class BaseAgent:
     @property
     def is_repeating_position(self) -> bool:
         return len(self.recent_positions) == 4 and len(set(self.recent_positions)) <= 2
+
+
+def sex_for_agent_id(agent_id: str) -> str:
+    """Assign balanced, reproducible F/M sexes without affecting simulation RNG."""
+    try:
+        index = int(agent_id.rsplit("_", 1)[-1])
+    except ValueError:
+        index = 1
+    return "F" if index % 2 else "M"

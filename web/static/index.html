@@ -24,6 +24,7 @@
         <button id="play-button" class="button primary">▶ Iniciar</button>
         <button id="pause-button" class="button">Ⅱ Pausar</button>
         <button id="step-button" class="button">→ Un tick</button>
+        <button id="cancel-button" class="button danger">Cancelar experimento</button>
         <button id="next-run-button" class="button next-cycle" disabled>↻ Siguiente ciclo</button>
       </div>
       <div class="timeline">
@@ -88,14 +89,17 @@
               <h2>Cuadrícula viva</h2>
             </div>
             <div class="legend">
-              <span><i class="legend-human"></i>Humano</span>
-              <span><i class="legend-animal"></i>Animal</span>
+              <span><i class="legend-human"></i>Humano F / M</span>
+              <span><i class="legend-animal"></i>Presa</span>
+              <span><i class="legend-predator"></i>Depredador</span>
+              <span><i class="legend-baby"></i>Cría</span>
               <span><i class="legend-food"></i>Comida</span>
+              <span><i class="legend-stockpile"></i>Reserva</span>
               <span><i class="legend-water"></i>Agua</span>
             </div>
           </div>
           <canvas id="world" class="world" width="720" height="480" aria-label="Matriz del mundo LifeSim"></canvas>
-          <p class="world-hint">Humano: figura vertical naranja · Animal: figura horizontal verde. Selecciona uno para inspeccionar su brain.</p>
+          <p class="world-hint">Corazón: vínculo · Vientre amarillo: embarazo · Cesta: comida transportada · Barra naranja/roja: hambre · Los campamentos crecen con sus reservas. Selecciona un agente para inspeccionar su brain.</p>
         </article>
 
         <div class="metric-grid">
@@ -134,6 +138,18 @@
             <ul id="learned-explanation" class="learned-explanation"></ul>
           </div>
         </article>
+
+        <section class="panel neural-lab neural-lab-wide">
+          <div class="neural-lab-heading">
+            <div>
+              <p class="eyebrow">BRAIN V2 EN VIVO</p>
+              <h2>Cómo llega el brain a una decisión</h2>
+            </div>
+            <strong id="brain-view-label" class="brain-view-label">Todos los humanos</strong>
+          </div>
+          <canvas id="brain-network" width="1320" height="410" aria-label="Flujo de activaciones del Brain v2"></canvas>
+          <p id="brain-network-caption" class="brain-caption"></p>
+        </section>
       </div>
 
       <aside class="inspector-column">
@@ -151,8 +167,25 @@
             <button id="all-animals-button" class="scope-button">Todos los animales</button>
           </div>
 
-          <div id="agent-empty" class="empty-state">No hay agentes en esta vista.</div>
+          <div id="agent-empty" class="empty-state" hidden>No hay agentes en esta vista.</div>
+          <div id="group-overview" class="group-overview">
+            <div class="group-intro">
+              <span>RESUMEN DE ESPECIE</span>
+              <p>Selecciona una figura del mundo para abrir su ficha individual.</p>
+            </div>
+            <canvas id="group-chart" width="360" height="250" aria-label="Estado promedio de la especie"></canvas>
+            <div id="group-summary" class="group-summary"></div>
+          </div>
           <div id="agent-details" hidden>
+            <section id="rpg-profile" class="rpg-profile">
+              <div id="rpg-avatar" class="rpg-avatar">H</div>
+              <div class="rpg-identity">
+                <span id="rpg-title">Habitante</span>
+                <strong id="favorite-action">Sin historial</strong>
+                <small id="agent-story">Aún no ha comenzado su aventura.</small>
+              </div>
+            </section>
+            <div id="rpg-facts" class="rpg-facts"></div>
             <div class="vitals" id="vitals"></div>
             <div class="decision-card">
               <div><span>Acción</span><strong id="agent-action">—</strong></div>
@@ -191,18 +224,6 @@
           <div id="event-stream" class="event-stream"></div>
         </article>
       </aside>
-    </section>
-
-    <section class="panel neural-lab neural-lab-wide">
-      <div class="neural-lab-heading">
-        <div>
-          <p class="eyebrow">BRAIN V2 EN VIVO</p>
-          <h2>La decisión neuronal, capa por capa</h2>
-        </div>
-        <strong id="brain-view-label" class="brain-view-label">Todos los humanos</strong>
-      </div>
-      <canvas id="brain-network" width="1320" height="520" aria-label="Diagrama grande de activaciones del brain"></canvas>
-      <p id="brain-network-caption" class="brain-caption"></p>
     </section>
   </main>
 

@@ -21,22 +21,34 @@ class BrainConfig:
 
 @dataclass(slots=True)
 class SimulationConfig:
-    reward_version: int = 5
+    reward_version: int = 8
     brain_architecture_version: int = 2
     # A denser matrix gives the agents more room without making the web panel larger.
     grid_width: int = 60
     grid_height: int = 40
     num_humans: int = 5
     num_animals: int = 10
-    initial_food: int = 90
+    # Keep a modest, spatially distributed food reserve proportional to the
+    # population. Consumed cells return gradually, so eating too early wastes
+    # a shared resource while waiting too long risks starvation.
+    food_per_agent: int = 1
+    initial_food: int = 1
     initial_water: int = 120
     initial_obstacles: int = 100
+    # Retained in serialized configs; food now uses distributed placement.
     food_cluster_count: int = 9
     water_cluster_count: int = 9
+    # Retained in serialized configs; food capacity now comes from population.
     max_food: int = 130
-    food_respawn_probability: float = 0.08
+    # Independent chance per missing food cell and tick. At 0.03, one consumed
+    # cell remains unavailable for about 33 ticks on average.
+    food_respawn_probability: float = 0.03
     # Kept in serialized configs for backwards compatibility. Water is permanent.
     water_respawn_probability: float = 0.0
+    predator_fraction: float = 0.30
+    predator_attack_damage: float = 0.25
+    predator_attack_reward: float = 0.25
+    predator_kill_reward: float = 1.0
     num_ticks: int = 5_000
     stop_when_no_humans: bool = True
     status_every: int = 100
@@ -54,6 +66,20 @@ class SimulationConfig:
     dehydration_damage: float = 0.020
     rest_energy_gain: float = 0.10
     food_hunger_reduction: float = 0.50
+    gather_capacity: int = 1
+    gathering_hunger_limit: float = 0.50
+    gather_pickup_reward: float = 0.15
+    gather_deposit_reward: float = 0.60
+    gather_progress_reward: float = 0.08
+    gather_regress_penalty: float = 0.04
+    baby_feed_reward: float = 0.40
+    maternal_baby_hunger_penalty_scale: float = 1.50
+    maternal_baby_starvation_penalty: float = 5.0
+    # A full reproductive cycle occupies F for 550 ticks. This keeps births
+    # meaningful without allowing exponential population growth in long runs.
+    courtship_ticks: int = 50
+    pregnancy_ticks: int = 300
+    dependent_baby_ticks: int = 200
     water_thirst_reduction: float = 0.60
     need_action_threshold: float = 0.25
     # Plan before needs become urgent: safe <= 50%, danger begins at 70%.
@@ -94,6 +120,27 @@ class SimulationConfig:
     )
 
     def __post_init__(self) -> None:
+        if self.food_per_agent <= 0:
+            raise ValueError("food_per_agent must be positive")
+        if not 0.0 <= self.food_respawn_probability <= 1.0:
+            raise ValueError("food_respawn_probability must be between 0 and 1")
+        if self.gather_capacity <= 0:
+            raise ValueError("gather_capacity must be positive")
+        if not 0.0 < self.gathering_hunger_limit < 1.0:
+            raise ValueError("gathering_hunger_limit must be between 0 and 1")
+        if min(self.courtship_ticks, self.pregnancy_ticks, self.dependent_baby_ticks) <= 0:
+            raise ValueError("Reproduction durations must be positive")
+        if (
+            self.maternal_baby_hunger_penalty_scale < 0.0
+            or self.maternal_baby_starvation_penalty < 0.0
+        ):
+            raise ValueError("Maternal care penalties cannot be negative")
+        if not 0.0 <= self.predator_fraction <= 1.0:
+            raise ValueError("predator_fraction must be between 0 and 1")
+        if not 0.0 < self.predator_attack_damage <= 1.0:
+            raise ValueError("predator_attack_damage must be in (0, 1]")
+        if self.predator_attack_reward < 0.0 or self.predator_kill_reward < 0.0:
+            raise ValueError("Predator rewards cannot be negative")
         if not (
             0.0 <= self.epsilon_standard_min
             <= self.epsilon_standard_max

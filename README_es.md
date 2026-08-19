@@ -22,13 +22,13 @@ El laboratorio web completo durante un ciclo de entrenamiento activo, con los co
 
 ### Brain v2
 
-La vista de decisión neuronal en vivo muestra los codificadores de necesidades y memoria espacial, su capa de fusión, los ocho Q-values y la acción seleccionada por el brain.
+La vista de decisión neuronal en vivo muestra los codificadores de necesidades y memoria espacial/social, su capa de fusión, los once Q-values y la acción seleccionada por el brain.
 
 ![Visualización de la decisión neuronal de Brain v2](docs/images/brain-v2.png)
 
 ### Mundo vivo
 
-El mundo de 60×40 contiene humanos, animales, comida y agua agrupadas, además de obstáculos. Los agentes perciben y actúan sobre esta misma cuadrícula durante el entrenamiento.
+El mundo de 60×40 contiene humanos, animales, comida distribuida, agua agrupada y obstáculos. Los agentes perciben y actúan sobre esta misma cuadrícula durante el entrenamiento.
 
 ![Cuadrícula del mundo vivo de LifeSim](docs/images/world-grid.png)
 
@@ -65,15 +65,17 @@ python main.py --new --web --seed 42
 Después abre `http://127.0.0.1:8765`. La simulación comienza pausada para no perder los primeros ticks. La interfaz permite:
 
 - iniciar, pausar o avanzar exactamente un tick;
+- cancelar el experimento activo y guardar un checkpoint parcial si ya avanzó;
 - cambiar la velocidad entre 1 y 30 ticks por segundo;
 - crear un experimento con 1–30 humanos y 1–50 animales mediante sliders;
 - ajustar la anchura de los brains humanos y animales entre 8 y 64 neuronas;
 - iniciar un experimento desde el **Best Result Brain (BRB)** mediante un checkbox;
-- recorrer una matriz Canvas de 60×40 campos, renderizada internamente a 960×640 para conservar pixel art nítido dentro del mismo espacio visual;
-- distinguir humanos verticales naranjas, animales cuadrúpedos horizontales, plantas con frutos, agua animada visualmente por ondas y obstáculos de roca;
-- ver por defecto estadísticas agregadas de todos los humanos o todos los animales;
-- seleccionar un agente en el mundo para aislar únicamente sus datos;
-- observar debajo del mundo un diagrama Brain v2 de 1320×520: dos ramas —necesidades y memoria espacial—, conexiones cuya intensidad sigue la señal, fusión, ocho Q-values etiquetados y acción elegida;
+- recorrer una matriz Canvas de 60×40 campos, renderizada internamente a 1200×800 para conservar pixel art nítido dentro del mismo espacio visual;
+- distinguir humanos F/M, presas, depredadores, bebés y cadáveres específicos, con animaciones de movimiento, ataque, recolección, comida, bebida y descanso;
+- observar terreno procedural con césped, flores, piedras, plantas con frutos, agua ondulante, senderos y campamentos que evolucionan según la comida almacenada;
+- ver un panel de especie con población, vitales medios, actividad dominante, reward y updates cuando no hay un individuo seleccionado;
+- seleccionar un agente para abrir una ficha RPG con identidad, sexo, rol, posición, edad, hijos nacidos, actividad favorita histórica, condición actual y detalles de aprendizaje;
+- observar debajo del Loop real un flujo Brain v2 simplificado: necesidades, mundo/memoria social, ambos codificadores, fusión y once Q-values sin la antigua maraña de conexiones;
 - seguir la fuerza media de sus pesos y el cambio desde la lectura anterior;
 - distinguir exploración aleatoria de una acción seleccionada por el brain;
 - ver crecer el replay personal y el Horde replay colectivo, junto con cada actualización real de pesos y su loss;
@@ -192,15 +194,15 @@ POST /api/control  play, pause, step, speed, next_run o new_experiment
 
 Los assets HTML, CSS y JavaScript se sirven con `Cache-Control: no-store`, de modo que basta refrescar el navegador durante desarrollo. No hay WebSocket: mientras corre, el cliente consulta `/api/state` aproximadamente cada 160 ms. La velocidad visual controla cuántos ticks ejecuta el hilo por segundo; no altera las ecuaciones metabólicas ni el contenido de cada experiencia.
 
-Toda configuración experimental vive en `config.py`. Brain v2 se construye dinámicamente con tres tamaños: `[codificador_necesidades, codificador_espacial, fusión]`. El humano usa por defecto supervivencia `15 → 16`, espacio/memoria `18 → 32`, fusión `48 → 32` y salida `32 → 8`. El animal usa `15 → 12`, `16 → 24`, fusión `36 → 24` y salida `24 → 8`. Se pueden cambiar esos tamaños, learning rate, batch size, gamma, frecuencia de actualización de la target network y capacidad del replay buffer sin tocar el modelo.
+Toda configuración experimental vive en `config.py`. Brain v2 se construye dinámicamente con tres tamaños: `[codificador_necesidades, codificador_espacial, fusión]`. El humano usa por defecto supervivencia `15 → 16`, estado espacial/social `29 → 32`, fusión `48 → 32` y salida `32 → 11`. El animal usa `15 → 12`, `27 → 24`, fusión `36 → 24` y salida `24 → 11`. Se pueden cambiar esos tamaños, learning rate, batch size, gamma, frecuencia de actualización de la target network y capacidad del replay buffer sin tocar el modelo.
 
 ## Percepción y decisiones
 
-Las observaciones son tensores pequeños y documentados en `agents/human.py` y `agents/animal.py`. Los primeros quince valores forman la rama de supervivencia: hambre, sed, falta de energía y salud, cuatro banderas de prioridad, riesgo progresivo de hambre/sed/agotamiento, daño activo, daño reciente, margen de vida estimado y urgencia vital combinada. El riesgo comienza a crecer desde el 50%, antes de que la salud empiece a caer. El resto forma la rama espacial: memoria de comida y agua, confianza y edad del recuerdo, obstáculos cardinales, posición y recursos al alcance. Los humanos añaden distancia a otros humanos y animales.
+Las observaciones son tensores pequeños y documentados en `agents/human.py` y `agents/animal.py`. Los primeros quince valores forman la rama de supervivencia: hambre, sed, falta de energía y salud, cuatro banderas de prioridad, riesgo progresivo de hambre/sed/agotamiento, daño activo, daño reciente, margen de vida estimado y urgencia vital combinada. El riesgo comienza a crecer desde el 50%, antes de que la salud empiece a caer. El resto forma la rama espacial/social: memoria de comida y agua, confianza y edad del recuerdo, obstáculos, posición, recursos al alcance, comida cargada, dirección y contenido de la reserva, parejas elegibles, corazón, embarazo, cuidado y dependencia. Los humanos añaden distancia a otros humanos y animales.
 
 La visión de obstáculos es local (`vision_radius = 6`), pero comida y agua producen un rastro de largo alcance (`resource_sense_radius = 100`). El agente conserva un objetivo espacial y, cuando una necesidad se vuelve prioritaria, mantiene ese destino mientras el recurso siga existiendo. Si otro agente consume la comida, corrige el recuerdo y busca otro objetivo. Esta separación evita que un mapa de 60×40 convierta la búsqueda inicial en azar puro.
 
-La red produce ocho Q-values, uno por acción: mover en cuatro direcciones, comer, beber, descansar o esperar. Epsilon-greedy decide entre exploración aleatoria y `argmax` de esos Q-values. **Epsilon (ε) es la probabilidad de ignorar temporalmente la decisión favorita del brain y probar una acción aleatoria.** Ya no existe un epsilon global que comience en 100%: es un rasgo individual persistente. Aproximadamente el 90% de cada especie recibe un perfil normal entre `0.01` y `0.15`; una minoría exploradora estable —10%, al menos un individuo— usa `0.50`. Así la mayoría explota lo aprendido y algunos exploradores continúan produciendo experiencias nuevas. En estado seguro el gobernador solo elimina acciones físicamente inválidas; al aparecer una prioridad vital limita temporalmente el conjunto a rutas que preservan la supervivencia. La elección entre las opciones permitidas sigue saliendo de los Q-values del brain.
+La red produce once Q-values, uno por acción: mover en cuatro direcciones, comer, beber, descansar, esperar, atacar, recolectar o aparearse. Epsilon-greedy decide entre exploración aleatoria y `argmax` de esos Q-values. **Epsilon (ε) es la probabilidad de ignorar temporalmente la decisión favorita del brain y probar una acción aleatoria.** Ya no existe un epsilon global que comience en 100%: es un rasgo individual persistente. Aproximadamente el 90% de cada especie recibe un perfil normal entre `0.01` y `0.15`; una minoría exploradora estable —10%, al menos un individuo— usa `0.50`. Así la mayoría explota lo aprendido y algunos exploradores continúan produciendo experiencias nuevas. Antes de la zona de peligro, el gobernador solo elimina acciones físicamente inválidas o rutas inviables y el brain conserva la decisión de cuándo comer. A partir del 70% de una necesidad, limita temporalmente el conjunto a acciones que preservan la supervivencia.
 
 ### Aprendizaje colectivo Horde
 
@@ -210,7 +212,13 @@ Esta primera implementación es **Horde-inspired collective replay**: toma la id
 
 Un agente puede comer o beber desde su celda o desde una celda cardinal adyacente. Cuando tiene una necesidad relevante recibe una señal pequeña por acercarse al recurso urgente y una señal negativa por alejarse; el reward grande continúa reservado para comer o beber realmente. Así se mantiene la decisión en el brain, pero deja de depender de una coincidencia extremadamente rara de posición y acción.
 
-El agua se genera en varios clusters grandes y representa fuentes permanentes: beber no elimina una casilla. La comida también aparece en clusters, sí se consume al comer y vuelve a crecer gradualmente junto a plantas existentes hasta `max_food`. Los centros se distribuyen por máxima separación y cada zona de comida tiene agua cercana, formando hábitats alcanzables en lugar de dejar desiertos aleatorios. Cantidades, número de clusters y probabilidad de rebrote viven en `config.py`.
+El agua se genera en varios clusters grandes y representa fuentes permanentes: beber no elimina una casilla. La comida sí se consume y el mundo comienza con una reserva moderada de `food_per_agent` casillas por habitante —una por defecto—. Cada espacio faltante tiene solo un 3% de probabilidad de reaparecer por tick, por lo que una unidad consumida tarda unos 33 ticks en volver en promedio. Tanto las casillas iniciales como los reemplazos se colocan por máxima separación para conservar comida en distintas zonas. Esto hace importante decidir cuándo comer: hacerlo demasiado pronto desperdicia parte del alimento, pero esperar demasiado eleva el riesgo de inanición.
+
+Cuando no tiene demasiada hambre, un agente puede elegir `GATHER`: toma comida cercana, carga una unidad y la lleva a la reserva común de su especie. Otra acción `GATHER` junto a la reserva la deposita. Esa comida continúa dentro del presupuesto ecológico —guardarla no provoca reposición artificial— y luego puede consumirse con `EAT`. Las reservas son anclas espaciales simples, intencionalmente preparadas para evolucionar después hacia casas y aldeas.
+
+Cada agente posee sexo persistente `F` o `M`. Una pareja de la misma especie puede elegir `MATE` al compartir exactamente una casilla, siempre que F no esté embarazada ni cuidando bebés. Un corazón permanece visible durante 50 ticks; después F atraviesa 300 ticks de embarazo. El parto produce un bebé en 70% de los casos, dos en 25% y tres en 5%. Durante 200 ticks cada cría sigue exclusivamente a su madre; si ella recolecta comida mientras una cría cercana tiene hambre, la alimenta primero. Después la cría obtiene control normal de su brain. El ciclo ocupa a F durante al menos 550 ticks, limitando el crecimiento explosivo de población. Cada recién nacido tiene un brain independiente y entra al replay Horde de su especie. En la web, los humanos F son rosados y los M azules.
+
+Una fracción configurable de animales recibe además `predator = true` —30% por defecto—. Esos animales pueden elegir `ATTACK` contra otros animales o humanos en su casilla o en una vecina cardinal. Los humanos también pueden atacar, pero únicamente a animales depredadores al alcance; nunca a presas ni a otros humanos. El ataque causa daño configurable, puede matar al objetivo y produce componentes explícitos de reward por ataque y muerte para el aprendizaje DQN.
 
 ### Reward proporcional a la necesidad
 
@@ -218,9 +226,9 @@ Comer, beber y descansar no entregan un premio fijo. Si hambre, sed o falta de e
 
 Las acciones innecesarias acumulan una penalización independiente por tipo: `-0.10`, `-0.20`, `-0.30` y así sucesivamente hasta `-1.00`. La racha solo se reinicia cuando esa misma acción vuelve a satisfacer una necesidad real. Esto evita obtener reward infinito bebiendo cada tick de una fuente permanente. El discount factor es `gamma = 0.99` para que consecuencias tardías como morir de hambre influyan más en decisiones anteriores.
 
-Reward v5 organiza hambre y sed en tres zonas. Desde 25% comienza la planificación protegida; el objetivo seguro es permanecer en 50% o menos; 70% abre la zona de peligro. Cada tick por encima del 50% tiene un costo cuadrático que llega a `-0.30` al alcanzar 70% y puede crecer hasta `-0.80`. Volver realmente a la zona segura entrega `+0.25`, además del reward proporcional de comer o beber. Como el mapa duplicó sus dimensiones originales pero los agentes siguen avanzando una celda por tick, hambre y sed aumentan `0.005` por tick para conservar el presupuesto metabólico por distancia.
+Reward v8 organiza hambre y sed en tres zonas. Desde 25% comienza la planificación protegida; el objetivo seguro es permanecer en 50% o menos; 70% abre la zona de peligro. Cada tick por encima del 50% tiene un costo cuadrático que llega a `-0.30` al alcanzar 70% y puede crecer hasta `-0.80`. Volver realmente a la zona segura entrega `+0.25`, además del reward proporcional de comer o beber. Recolectar, depositar, alimentar una cría y aparearse producen componentes explícitos. Una madre observa el hambre máxima de sus bebés: recibe hasta `-1.50` por tick por hambre superior al 50% y `-5.0` adicionales si una cría dependiente muere de inanición. Como alimentar reduce el hambre antes de calcular el castigo, el brain puede aprender a prevenirlo mediante `GATHER`.
 
-Reward v5 añade un **gobernador de supervivencia** observable. El brain continúa produciendo los ocho Q-values, pero una máscara elimina acciones físicamente imposibles y decisiones incompatibles con supervivencia: no puede elegir `DRINK` sin agua, `EAT` sin comida, atravesar obstáculos ni alejarse de un recurso prioritario recordado. Cerca de recursos el brain elige entre las acciones seguras disponibles; durante exploración, epsilon también muestrea solamente acciones permitidas. La experiencia guarda la máscara del siguiente estado y el target DQN excluye los Q-values imposibles antes de calcular su máximo. La web muestra cuándo el gobernador cambió la preferencia original del brain.
+Reward v8 conserva el **gobernador de supervivencia** observable y añade recompensas sociales y de depredación. El brain produce once Q-values, pero una máscara elimina acciones físicamente imposibles: no puede elegir `DRINK` sin agua, `EAT` sin comida, `GATHER` con hambre o sin comida/carga válida, `MATE` sin pareja elegible, `ATTACK` sin un objetivo legal al alcance ni atravesar obstáculos. Entre 25% y 70% el brain decide cuándo consumir; al entrar en peligro, el gobernador fuerza el consumo o una ruta segura hacia el recurso recordado. Durante exploración, epsilon también muestrea solamente acciones permitidas. La experiencia guarda la máscara del siguiente estado y el target DQN excluye los Q-values imposibles antes de calcular su máximo. La web muestra cuándo el gobernador cambió la preferencia original del brain.
 
 `WAIT` y las acciones que no atienden una necesidad prioritaria reciben `ignored_survival_priority`. Un movimiento de búsqueda sigue permitido cuando el agente no conoce ningún recurso. Si recuerda comida o agua, acercarse recibe un reward que aumenta con la urgencia; alejarse o vagar recibe tanto progreso espacial negativo como penalización por ignorar la prioridad. El cálculo solo usa recursos visibles o recordados, nunca información oculta del mundo.
 
@@ -248,7 +256,7 @@ Técnicamente, para cada muestra el trainer calcula `Q(s, a)` con `gather`, cons
 
 ### Límite conocido de ecología v0.1
 
-El comportamiento neuronal y la capacidad ecológica deben medirse por separado. Con `hunger_per_tick = 0.005` y una comida que reduce hambre en `0.50`, cada agente necesita aproximadamente una comida cada 100 ticks. La población inicial de 15 agentes demanda cerca de `0.15` unidades por tick, mientras el rebrote actual intenta crear como máximo una unidad con probabilidad `0.08` por tick. Por eso el run 033 demuestra supervivencia individual y sirve como BRB, pero también muestra un cuello de botella: la reserva alimentaria se estabiliza solo después de que disminuye la población. La siguiente iteración debe hacer crecer comida por cluster o escalar la producción con la población antes de usar supervivencia grupal como prueba concluyente del aprendizaje.
+El comportamiento neuronal y la capacidad ecológica todavía deben medirse por separado. La reserva de comida escala con la población, pero su reposición gradual crea escasez temporal y competencia sin hacer imposible la supervivencia sostenida. En los runs nuevos, la presión depredadora, la navegación, la elección del momento para comer y el aprendizaje son variables de supervivencia significativas. Los resultados BRB históricos se produjeron con ecologías anteriores y no deben compararse directamente con estos runs.
 
 ## Persistencia y resultados
 
@@ -284,4 +292,4 @@ El resumen first/last 20% es evidencia descriptiva para inspección; por sí sol
 pytest
 ```
 
-La suite actual contiene 55 tests y cubre creación del mundo y agentes, ramas y activaciones de Brain v2, perfiles epsilon individuales, Horde replay por especie, prioridad de necesidades, memoria espacial, movimiento, comida, bebida, backpropagation con cambio de pesos, checkpoint y reproducción exacta de outputs, selección BRB, rechazo claro de Brain v1 y sanity checks de shapes y límites.
+La suite actual contiene 75 tests y cubre creación del mundo y agentes, comida proporcional distribuida, reposición gradual, recolección, progreso hacia reservas y depósitos, decisión del momento de comer, sexo F/M, apareamiento, embarazo, camadas, seguimiento, alimentación y castigos maternales, poblaciones ampliadas entre ciclos, ataques de depredadores y defensa humana selectiva, cancelación web, ramas y activaciones de Brain v2, perfiles epsilon individuales, Horde replay por especie, prioridad de necesidades, memoria espacial/social, movimiento, comida, bebida, backpropagation con cambio de pesos, checkpoint y reproducción exacta de outputs, selección BRB, rechazo claro de Brain v1 y sanity checks de shapes y límites.
