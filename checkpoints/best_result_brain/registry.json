@@ -1,47 +1,52 @@
 {
   "version": 1,
   "score_version": 2,
-  "created_at": "2026-08-17T04:53:27.437776+00:00",
-  "experiment_id": 33,
+  "created_at": "2026-08-19T17:14:34.063111+00:00",
+  "experiment_id": 41,
   "run_number": 1,
-  "source_checkpoint": "/Users/ronnie/Documents/lifesim/checkpoints/experiment_033/run_001",
-  "champion_dir": "checkpoints/best_result_brain/champions/experiment_033_run_001",
+  "source_checkpoint": "/Users/ronnie/Documents/lifesim/checkpoints/experiment_041/run_001",
+  "champion_dir": "checkpoints/best_result_brain/champions/experiment_041_run_001",
   "score_vector": [
     1.0,
-    0.4,
-    2.0,
-    696.0,
-    2388.0,
-    117.0,
-    149.0,
-    -47.0
+    8.9,
+    178.0,
+    239.5,
+    1122.1891025641025,
+    3064.0,
+    3374.0,
+    -51297.0
   ],
   "score": {
     "completed_tick_limit": true,
-    "human_completion_ratio": 0.4,
-    "final_humans": 2,
-    "initial_humans": 5,
-    "mean_human_survival": 2388.0,
-    "median_human_survival": 696.0,
-    "brain_selected_drinks": 117,
-    "successful_meals": 149,
+    "human_completion_ratio": 8.9,
+    "final_humans": 178,
+    "initial_humans": 20,
+    "mean_human_survival": 1122.1891025641025,
+    "median_human_survival": 239.5,
+    "brain_selected_drinks": 3064,
+    "successful_meals": 3374,
     "last_human_tick": 5000
   },
   "config": {
-    "reward_version": 5,
+    "reward_version": 8,
     "brain_architecture_version": 2,
     "grid_width": 60,
     "grid_height": 40,
-    "num_humans": 5,
+    "num_humans": 20,
     "num_animals": 10,
-    "initial_food": 90,
+    "food_per_agent": 1,
+    "initial_food": 1,
     "initial_water": 120,
     "initial_obstacles": 100,
     "food_cluster_count": 9,
     "water_cluster_count": 9,
     "max_food": 130,
-    "food_respawn_probability": 0.08,
+    "food_respawn_probability": 0.03,
     "water_respawn_probability": 0.0,
+    "predator_fraction": 0.3,
+    "predator_attack_damage": 0.25,
+    "predator_attack_reward": 0.25,
+    "predator_kill_reward": 1.0,
     "num_ticks": 5000,
     "stop_when_no_humans": true,
     "status_every": 100,
@@ -57,6 +62,18 @@
     "dehydration_damage": 0.02,
     "rest_energy_gain": 0.1,
     "food_hunger_reduction": 0.5,
+    "gather_capacity": 1,
+    "gathering_hunger_limit": 0.5,
+    "gather_pickup_reward": 0.15,
+    "gather_deposit_reward": 0.6,
+    "gather_progress_reward": 0.08,
+    "gather_regress_penalty": 0.04,
+    "baby_feed_reward": 0.4,
+    "maternal_baby_hunger_penalty_scale": 1.5,
+    "maternal_baby_starvation_penalty": 5.0,
+    "courtship_ticks": 50,
+    "pregnancy_ticks": 300,
+    "dependent_baby_ticks": 200,
     "water_thirst_reduction": 0.6,
     "need_action_threshold": 0.25,
     "priority_need_threshold": 0.25,
@@ -85,9 +102,9 @@
     "debug_rewards": false,
     "human_brain": {
       "hidden_sizes": [
-        16,
         32,
-        32
+        64,
+        64
       ],
       "learning_rate": 0.001,
       "replay_capacity": 5000,
@@ -115,27 +132,27 @@
   "architectures": {
     "human": {
       "architecture_version": 2,
-      "input_size": 33,
+      "input_size": 44,
       "need_input_size": 15,
-      "spatial_input_size": 18,
+      "spatial_input_size": 29,
       "hidden_sizes": [
-        16,
         32,
-        32
+        64,
+        64
       ],
-      "output_size": 8
+      "output_size": 11
     },
     "animal": {
       "architecture_version": 2,
-      "input_size": 31,
+      "input_size": 42,
       "need_input_size": 15,
-      "spatial_input_size": 16,
+      "spatial_input_size": 27,
       "hidden_sizes": [
         12,
         24,
         24
       ],
-      "output_size": 8
+      "output_size": 11
     }
   },
   "agents": [
@@ -144,105 +161,2597 @@
       "agent_type": "human",
       "file": "human_001.pt",
       "steps_survived": 5000,
-      "total_reward": -60.45032916666643
+      "total_reward": -1414.3230416666738
     },
     {
       "agent_id": "human_002",
       "agent_type": "human",
       "file": "human_002.pt",
-      "steps_survived": 629,
-      "total_reward": -41.19311250000006
+      "steps_survived": 5000,
+      "total_reward": -652.2243458333403
     },
     {
       "agent_id": "human_003",
       "agent_type": "human",
       "file": "human_003.pt",
-      "steps_survived": 697,
-      "total_reward": -105.11015416666675
+      "steps_survived": 5000,
+      "total_reward": -68.45444583333237
     },
     {
       "agent_id": "human_004",
       "agent_type": "human",
       "file": "human_004.pt",
-      "steps_survived": 617,
-      "total_reward": -53.13054583333339
+      "steps_survived": 5000,
+      "total_reward": 50.72768749999967
     },
     {
       "agent_id": "human_005",
       "agent_type": "human",
       "file": "human_005.pt",
       "steps_survived": 5000,
-      "total_reward": 154.45136666666747
+      "total_reward": -716.4558708333124
+    },
+    {
+      "agent_id": "human_006",
+      "agent_type": "human",
+      "file": "human_006.pt",
+      "steps_survived": 5000,
+      "total_reward": 25.061516666666606
+    },
+    {
+      "agent_id": "human_007",
+      "agent_type": "human",
+      "file": "human_007.pt",
+      "steps_survived": 5000,
+      "total_reward": -358.464833333339
+    },
+    {
+      "agent_id": "human_008",
+      "agent_type": "human",
+      "file": "human_008.pt",
+      "steps_survived": 5000,
+      "total_reward": 21.313854166669476
+    },
+    {
+      "agent_id": "human_009",
+      "agent_type": "human",
+      "file": "human_009.pt",
+      "steps_survived": 5000,
+      "total_reward": -139.0995208333319
+    },
+    {
+      "agent_id": "human_010",
+      "agent_type": "human",
+      "file": "human_010.pt",
+      "steps_survived": 5000,
+      "total_reward": -46.48042916666434
+    },
+    {
+      "agent_id": "human_011",
+      "agent_type": "human",
+      "file": "human_011.pt",
+      "steps_survived": 5000,
+      "total_reward": -402.47707916667565
+    },
+    {
+      "agent_id": "human_012",
+      "agent_type": "human",
+      "file": "human_012.pt",
+      "steps_survived": 5000,
+      "total_reward": -35.63194999999917
+    },
+    {
+      "agent_id": "human_013",
+      "agent_type": "human",
+      "file": "human_013.pt",
+      "steps_survived": 5000,
+      "total_reward": -519.8437958333286
+    },
+    {
+      "agent_id": "human_014",
+      "agent_type": "human",
+      "file": "human_014.pt",
+      "steps_survived": 5000,
+      "total_reward": -66.2372666666637
+    },
+    {
+      "agent_id": "human_015",
+      "agent_type": "human",
+      "file": "human_015.pt",
+      "steps_survived": 5000,
+      "total_reward": -641.0255208333404
+    },
+    {
+      "agent_id": "human_016",
+      "agent_type": "human",
+      "file": "human_016.pt",
+      "steps_survived": 5000,
+      "total_reward": -202.83835833333785
+    },
+    {
+      "agent_id": "human_017",
+      "agent_type": "human",
+      "file": "human_017.pt",
+      "steps_survived": 5000,
+      "total_reward": -579.3544374999927
+    },
+    {
+      "agent_id": "human_018",
+      "agent_type": "human",
+      "file": "human_018.pt",
+      "steps_survived": 5000,
+      "total_reward": -142.2233000000033
+    },
+    {
+      "agent_id": "human_019",
+      "agent_type": "human",
+      "file": "human_019.pt",
+      "steps_survived": 5000,
+      "total_reward": -552.8828458333367
+    },
+    {
+      "agent_id": "human_020",
+      "agent_type": "human",
+      "file": "human_020.pt",
+      "steps_survived": 5000,
+      "total_reward": -27.076216666666834
     },
     {
       "agent_id": "animal_001",
       "agent_type": "animal",
       "file": "animal_001.pt",
-      "steps_survived": 684,
-      "total_reward": -64.82866666666673
+      "steps_survived": 45,
+      "total_reward": -0.44000000000000006
     },
     {
       "agent_id": "animal_002",
       "agent_type": "animal",
       "file": "animal_002.pt",
-      "steps_survived": 614,
-      "total_reward": -89.01776666666684
+      "steps_survived": 203,
+      "total_reward": 1.5314375000000051
     },
     {
       "agent_id": "animal_003",
       "agent_type": "animal",
       "file": "animal_003.pt",
-      "steps_survived": 658,
-      "total_reward": -104.64016250000014
+      "steps_survived": 180,
+      "total_reward": -1.1533333333333444
     },
     {
       "agent_id": "animal_004",
       "agent_type": "animal",
       "file": "animal_004.pt",
       "steps_survived": 5000,
-      "total_reward": 85.3539958333354
+      "total_reward": -151.23258333333632
     },
     {
       "agent_id": "animal_005",
       "agent_type": "animal",
       "file": "animal_005.pt",
-      "steps_survived": 662,
-      "total_reward": -38.922766666666725
+      "steps_survived": 5000,
+      "total_reward": -441.3956833333333
     },
     {
       "agent_id": "animal_006",
       "agent_type": "animal",
       "file": "animal_006.pt",
-      "steps_survived": 694,
-      "total_reward": -107.48245833333343
+      "steps_survived": 5000,
+      "total_reward": -239.86391666667058
     },
     {
       "agent_id": "animal_007",
       "agent_type": "animal",
       "file": "animal_007.pt",
       "steps_survived": 5000,
-      "total_reward": 212.85791250000162
+      "total_reward": -757.4246999999748
     },
     {
       "agent_id": "animal_008",
       "agent_type": "animal",
       "file": "animal_008.pt",
-      "steps_survived": 599,
-      "total_reward": -65.96100000000011
+      "steps_survived": 986,
+      "total_reward": -199.2627666666663
     },
     {
       "agent_id": "animal_009",
       "agent_type": "animal",
       "file": "animal_009.pt",
-      "steps_survived": 586,
-      "total_reward": -43.98213333333336
+      "steps_survived": 5000,
+      "total_reward": -1246.4898749999995
     },
     {
       "agent_id": "animal_010",
       "agent_type": "animal",
       "file": "animal_010.pt",
-      "steps_survived": 683,
-      "total_reward": -45.17383333333334
+      "steps_survived": 5000,
+      "total_reward": -308.10789166667087
+    },
+    {
+      "agent_id": "human_021",
+      "agent_type": "human",
+      "file": "human_021.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_022",
+      "agent_type": "human",
+      "file": "human_022.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_023",
+      "agent_type": "human",
+      "file": "human_023.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_024",
+      "agent_type": "human",
+      "file": "human_024.pt",
+      "steps_survived": 4583,
+      "total_reward": -539.9119624999942
+    },
+    {
+      "agent_id": "animal_011",
+      "agent_type": "animal",
+      "file": "animal_011.pt",
+      "steps_survived": 2301,
+      "total_reward": -1256.4178500000055
+    },
+    {
+      "agent_id": "human_025",
+      "agent_type": "human",
+      "file": "human_025.pt",
+      "steps_survived": 4548,
+      "total_reward": -1103.5235666666656
+    },
+    {
+      "agent_id": "human_026",
+      "agent_type": "human",
+      "file": "human_026.pt",
+      "steps_survived": 4481,
+      "total_reward": -607.984170833329
+    },
+    {
+      "agent_id": "human_027",
+      "agent_type": "human",
+      "file": "human_027.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_028",
+      "agent_type": "human",
+      "file": "human_028.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_029",
+      "agent_type": "human",
+      "file": "human_029.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_012",
+      "agent_type": "animal",
+      "file": "animal_012.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_013",
+      "agent_type": "animal",
+      "file": "animal_013.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_030",
+      "agent_type": "human",
+      "file": "human_030.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_031",
+      "agent_type": "human",
+      "file": "human_031.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_032",
+      "agent_type": "human",
+      "file": "human_032.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_014",
+      "agent_type": "animal",
+      "file": "animal_014.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_033",
+      "agent_type": "human",
+      "file": "human_033.pt",
+      "steps_survived": 4094,
+      "total_reward": -778.4544374999996
+    },
+    {
+      "agent_id": "human_034",
+      "agent_type": "human",
+      "file": "human_034.pt",
+      "steps_survived": 1237,
+      "total_reward": -301.49850833333346
+    },
+    {
+      "agent_id": "human_035",
+      "agent_type": "human",
+      "file": "human_035.pt",
+      "steps_survived": 260,
+      "total_reward": -35.54216666666671
+    },
+    {
+      "agent_id": "human_036",
+      "agent_type": "human",
+      "file": "human_036.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_037",
+      "agent_type": "human",
+      "file": "human_037.pt",
+      "steps_survived": 4033,
+      "total_reward": -764.709237499987
+    },
+    {
+      "agent_id": "animal_015",
+      "agent_type": "animal",
+      "file": "animal_015.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_038",
+      "agent_type": "human",
+      "file": "human_038.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_039",
+      "agent_type": "human",
+      "file": "human_039.pt",
+      "steps_survived": 3929,
+      "total_reward": -818.1990083333285
+    },
+    {
+      "agent_id": "human_040",
+      "agent_type": "human",
+      "file": "human_040.pt",
+      "steps_survived": 3914,
+      "total_reward": -243.12501250000912
+    },
+    {
+      "agent_id": "human_041",
+      "agent_type": "human",
+      "file": "human_041.pt",
+      "steps_survived": 3904,
+      "total_reward": -701.9137541666469
+    },
+    {
+      "agent_id": "animal_016",
+      "agent_type": "animal",
+      "file": "animal_016.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_042",
+      "agent_type": "human",
+      "file": "human_042.pt",
+      "steps_survived": 3814,
+      "total_reward": -374.86895416667426
+    },
+    {
+      "agent_id": "human_043",
+      "agent_type": "human",
+      "file": "human_043.pt",
+      "steps_survived": 3814,
+      "total_reward": -988.1084958333303
+    },
+    {
+      "agent_id": "human_044",
+      "agent_type": "human",
+      "file": "human_044.pt",
+      "steps_survived": 3793,
+      "total_reward": -318.9696041666753
+    },
+    {
+      "agent_id": "animal_017",
+      "agent_type": "animal",
+      "file": "animal_017.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_018",
+      "agent_type": "animal",
+      "file": "animal_018.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_045",
+      "agent_type": "human",
+      "file": "human_045.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_046",
+      "agent_type": "human",
+      "file": "human_046.pt",
+      "steps_survived": 226,
+      "total_reward": -17.155
+    },
+    {
+      "agent_id": "human_047",
+      "agent_type": "human",
+      "file": "human_047.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_048",
+      "agent_type": "human",
+      "file": "human_048.pt",
+      "steps_survived": 223,
+      "total_reward": -16.045
+    },
+    {
+      "agent_id": "human_049",
+      "agent_type": "human",
+      "file": "human_049.pt",
+      "steps_survived": 3444,
+      "total_reward": -554.0628666666599
+    },
+    {
+      "agent_id": "human_050",
+      "agent_type": "human",
+      "file": "human_050.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_019",
+      "agent_type": "animal",
+      "file": "animal_019.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_051",
+      "agent_type": "human",
+      "file": "human_051.pt",
+      "steps_survived": 3402,
+      "total_reward": -718.3963416666585
+    },
+    {
+      "agent_id": "human_052",
+      "agent_type": "human",
+      "file": "human_052.pt",
+      "steps_survived": 3378,
+      "total_reward": -402.23972500000343
+    },
+    {
+      "agent_id": "human_053",
+      "agent_type": "human",
+      "file": "human_053.pt",
+      "steps_survived": 3350,
+      "total_reward": -842.8725249999922
+    },
+    {
+      "agent_id": "human_054",
+      "agent_type": "human",
+      "file": "human_054.pt",
+      "steps_survived": 240,
+      "total_reward": -25.085000000000008
+    },
+    {
+      "agent_id": "human_055",
+      "agent_type": "human",
+      "file": "human_055.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_056",
+      "agent_type": "human",
+      "file": "human_056.pt",
+      "steps_survived": 3327,
+      "total_reward": -352.75066666666856
+    },
+    {
+      "agent_id": "human_057",
+      "agent_type": "human",
+      "file": "human_057.pt",
+      "steps_survived": 3327,
+      "total_reward": -669.7401208333177
+    },
+    {
+      "agent_id": "human_058",
+      "agent_type": "human",
+      "file": "human_058.pt",
+      "steps_survived": 3326,
+      "total_reward": -259.75523750000605
+    },
+    {
+      "agent_id": "human_059",
+      "agent_type": "human",
+      "file": "human_059.pt",
+      "steps_survived": 3237,
+      "total_reward": -998.2948416666512
+    },
+    {
+      "agent_id": "human_060",
+      "agent_type": "human",
+      "file": "human_060.pt",
+      "steps_survived": 3236,
+      "total_reward": -438.8665166666725
+    },
+    {
+      "agent_id": "animal_020",
+      "agent_type": "animal",
+      "file": "animal_020.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_061",
+      "agent_type": "human",
+      "file": "human_061.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_062",
+      "agent_type": "human",
+      "file": "human_062.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_063",
+      "agent_type": "human",
+      "file": "human_063.pt",
+      "steps_survived": 2962,
+      "total_reward": -930.681433333322
+    },
+    {
+      "agent_id": "animal_021",
+      "agent_type": "animal",
+      "file": "animal_021.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_064",
+      "agent_type": "human",
+      "file": "human_064.pt",
+      "steps_survived": 2924,
+      "total_reward": -226.45196250000598
+    },
+    {
+      "agent_id": "animal_022",
+      "agent_type": "animal",
+      "file": "animal_022.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_065",
+      "agent_type": "human",
+      "file": "human_065.pt",
+      "steps_survived": 2882,
+      "total_reward": -780.3989166666674
+    },
+    {
+      "agent_id": "human_066",
+      "agent_type": "human",
+      "file": "human_066.pt",
+      "steps_survived": 2855,
+      "total_reward": -341.37220000000724
+    },
+    {
+      "agent_id": "human_067",
+      "agent_type": "human",
+      "file": "human_067.pt",
+      "steps_survived": 2828,
+      "total_reward": -480.3475916666733
+    },
+    {
+      "agent_id": "human_068",
+      "agent_type": "human",
+      "file": "human_068.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_069",
+      "agent_type": "human",
+      "file": "human_069.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_070",
+      "agent_type": "human",
+      "file": "human_070.pt",
+      "steps_survived": 2820,
+      "total_reward": -214.0234250000043
+    },
+    {
+      "agent_id": "animal_023",
+      "agent_type": "animal",
+      "file": "animal_023.pt",
+      "steps_survived": 2819,
+      "total_reward": -1222.5773916666685
+    },
+    {
+      "agent_id": "animal_024",
+      "agent_type": "animal",
+      "file": "animal_024.pt",
+      "steps_survived": 2819,
+      "total_reward": -709.6634916666569
+    },
+    {
+      "agent_id": "human_071",
+      "agent_type": "human",
+      "file": "human_071.pt",
+      "steps_survived": 2776,
+      "total_reward": -689.0787249999947
+    },
+    {
+      "agent_id": "human_072",
+      "agent_type": "human",
+      "file": "human_072.pt",
+      "steps_survived": 2776,
+      "total_reward": -222.32272083333788
+    },
+    {
+      "agent_id": "human_073",
+      "agent_type": "human",
+      "file": "human_073.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_074",
+      "agent_type": "human",
+      "file": "human_074.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_075",
+      "agent_type": "human",
+      "file": "human_075.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_076",
+      "agent_type": "human",
+      "file": "human_076.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_077",
+      "agent_type": "human",
+      "file": "human_077.pt",
+      "steps_survived": 2743,
+      "total_reward": -815.162999999997
+    },
+    {
+      "agent_id": "human_078",
+      "agent_type": "human",
+      "file": "human_078.pt",
+      "steps_survived": 2743,
+      "total_reward": -430.3415375000076
+    },
+    {
+      "agent_id": "human_079",
+      "agent_type": "human",
+      "file": "human_079.pt",
+      "steps_survived": 2735,
+      "total_reward": -697.2043124999964
+    },
+    {
+      "agent_id": "human_080",
+      "agent_type": "human",
+      "file": "human_080.pt",
+      "steps_survived": 2725,
+      "total_reward": -314.3049916666706
+    },
+    {
+      "agent_id": "human_081",
+      "agent_type": "human",
+      "file": "human_081.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_082",
+      "agent_type": "human",
+      "file": "human_082.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_083",
+      "agent_type": "human",
+      "file": "human_083.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_084",
+      "agent_type": "human",
+      "file": "human_084.pt",
+      "steps_survived": 2675,
+      "total_reward": -301.94170833333703
+    },
+    {
+      "agent_id": "animal_025",
+      "agent_type": "animal",
+      "file": "animal_025.pt",
+      "steps_survived": 2618,
+      "total_reward": -712.2107916666597
+    },
+    {
+      "agent_id": "animal_026",
+      "agent_type": "animal",
+      "file": "animal_026.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_085",
+      "agent_type": "human",
+      "file": "human_085.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_086",
+      "agent_type": "human",
+      "file": "human_086.pt",
+      "steps_survived": 2595,
+      "total_reward": -275.20681250000536
+    },
+    {
+      "agent_id": "human_087",
+      "agent_type": "human",
+      "file": "human_087.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_088",
+      "agent_type": "human",
+      "file": "human_088.pt",
+      "steps_survived": 226,
+      "total_reward": -18.966250000000002
+    },
+    {
+      "agent_id": "human_089",
+      "agent_type": "human",
+      "file": "human_089.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_090",
+      "agent_type": "human",
+      "file": "human_090.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_091",
+      "agent_type": "human",
+      "file": "human_091.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_027",
+      "agent_type": "animal",
+      "file": "animal_027.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_028",
+      "agent_type": "animal",
+      "file": "animal_028.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_092",
+      "agent_type": "human",
+      "file": "human_092.pt",
+      "steps_survived": 2412,
+      "total_reward": -242.41362500000363
+    },
+    {
+      "agent_id": "human_093",
+      "agent_type": "human",
+      "file": "human_093.pt",
+      "steps_survived": 2406,
+      "total_reward": -937.1550916666633
+    },
+    {
+      "agent_id": "human_094",
+      "agent_type": "human",
+      "file": "human_094.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_095",
+      "agent_type": "human",
+      "file": "human_095.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_096",
+      "agent_type": "human",
+      "file": "human_096.pt",
+      "steps_survived": 2321,
+      "total_reward": -315.86806666666956
+    },
+    {
+      "agent_id": "human_097",
+      "agent_type": "human",
+      "file": "human_097.pt",
+      "steps_survived": 2304,
+      "total_reward": -583.5751291666622
+    },
+    {
+      "agent_id": "human_098",
+      "agent_type": "human",
+      "file": "human_098.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_099",
+      "agent_type": "human",
+      "file": "human_099.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_100",
+      "agent_type": "human",
+      "file": "human_100.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_029",
+      "agent_type": "animal",
+      "file": "animal_029.pt",
+      "steps_survived": 2269,
+      "total_reward": -891.5561333333314
+    },
+    {
+      "agent_id": "human_101",
+      "agent_type": "human",
+      "file": "human_101.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_030",
+      "agent_type": "animal",
+      "file": "animal_030.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_102",
+      "agent_type": "human",
+      "file": "human_102.pt",
+      "steps_survived": 2228,
+      "total_reward": -321.957395833337
+    },
+    {
+      "agent_id": "human_103",
+      "agent_type": "human",
+      "file": "human_103.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_104",
+      "agent_type": "human",
+      "file": "human_104.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_105",
+      "agent_type": "human",
+      "file": "human_105.pt",
+      "steps_survived": 2219,
+      "total_reward": -452.41182083333376
+    },
+    {
+      "agent_id": "human_106",
+      "agent_type": "human",
+      "file": "human_106.pt",
+      "steps_survived": 2199,
+      "total_reward": -317.78038333333774
+    },
+    {
+      "agent_id": "human_107",
+      "agent_type": "human",
+      "file": "human_107.pt",
+      "steps_survived": 2191,
+      "total_reward": -601.9936041666692
+    },
+    {
+      "agent_id": "human_108",
+      "agent_type": "human",
+      "file": "human_108.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_109",
+      "agent_type": "human",
+      "file": "human_109.pt",
+      "steps_survived": 2168,
+      "total_reward": -624.855708333335
+    },
+    {
+      "agent_id": "human_110",
+      "agent_type": "human",
+      "file": "human_110.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_111",
+      "agent_type": "human",
+      "file": "human_111.pt",
+      "steps_survived": 2093,
+      "total_reward": -762.8025124999944
+    },
+    {
+      "agent_id": "human_112",
+      "agent_type": "human",
+      "file": "human_112.pt",
+      "steps_survived": 2093,
+      "total_reward": -339.13786250000527
+    },
+    {
+      "agent_id": "human_113",
+      "agent_type": "human",
+      "file": "human_113.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_114",
+      "agent_type": "human",
+      "file": "human_114.pt",
+      "steps_survived": 2059,
+      "total_reward": -202.42374166666843
+    },
+    {
+      "agent_id": "human_115",
+      "agent_type": "human",
+      "file": "human_115.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_116",
+      "agent_type": "human",
+      "file": "human_116.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_117",
+      "agent_type": "human",
+      "file": "human_117.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_118",
+      "agent_type": "human",
+      "file": "human_118.pt",
+      "steps_survived": 1974,
+      "total_reward": -213.4181208333368
+    },
+    {
+      "agent_id": "human_119",
+      "agent_type": "human",
+      "file": "human_119.pt",
+      "steps_survived": 1958,
+      "total_reward": -675.1802416666708
+    },
+    {
+      "agent_id": "human_120",
+      "agent_type": "human",
+      "file": "human_120.pt",
+      "steps_survived": 1958,
+      "total_reward": -229.58666250000104
+    },
+    {
+      "agent_id": "human_121",
+      "agent_type": "human",
+      "file": "human_121.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_031",
+      "agent_type": "animal",
+      "file": "animal_031.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_032",
+      "agent_type": "animal",
+      "file": "animal_032.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_033",
+      "agent_type": "animal",
+      "file": "animal_033.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_122",
+      "agent_type": "human",
+      "file": "human_122.pt",
+      "steps_survived": 1871,
+      "total_reward": -157.8200375000011
+    },
+    {
+      "agent_id": "human_123",
+      "agent_type": "human",
+      "file": "human_123.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_124",
+      "agent_type": "human",
+      "file": "human_124.pt",
+      "steps_survived": 1852,
+      "total_reward": -280.73375416667164
+    },
+    {
+      "agent_id": "human_125",
+      "agent_type": "human",
+      "file": "human_125.pt",
+      "steps_survived": 1846,
+      "total_reward": -176.48810000000296
+    },
+    {
+      "agent_id": "human_126",
+      "agent_type": "human",
+      "file": "human_126.pt",
+      "steps_survived": 1844,
+      "total_reward": -206.89725833333716
+    },
+    {
+      "agent_id": "human_127",
+      "agent_type": "human",
+      "file": "human_127.pt",
+      "steps_survived": 1844,
+      "total_reward": -507.0066000000031
+    },
+    {
+      "agent_id": "human_128",
+      "agent_type": "human",
+      "file": "human_128.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_129",
+      "agent_type": "human",
+      "file": "human_129.pt",
+      "steps_survived": 1762,
+      "total_reward": -375.6818375000043
+    },
+    {
+      "agent_id": "human_130",
+      "agent_type": "human",
+      "file": "human_130.pt",
+      "steps_survived": 1762,
+      "total_reward": -283.5408208333359
+    },
+    {
+      "agent_id": "human_131",
+      "agent_type": "human",
+      "file": "human_131.pt",
+      "steps_survived": 1762,
+      "total_reward": -602.8426749999996
+    },
+    {
+      "agent_id": "human_132",
+      "agent_type": "human",
+      "file": "human_132.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_133",
+      "agent_type": "human",
+      "file": "human_133.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_134",
+      "agent_type": "human",
+      "file": "human_134.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_135",
+      "agent_type": "human",
+      "file": "human_135.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_136",
+      "agent_type": "human",
+      "file": "human_136.pt",
+      "steps_survived": 1745,
+      "total_reward": -327.702804166668
+    },
+    {
+      "agent_id": "animal_034",
+      "agent_type": "animal",
+      "file": "animal_034.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_137",
+      "agent_type": "human",
+      "file": "human_137.pt",
+      "steps_survived": 221,
+      "total_reward": -14.764999999999999
+    },
+    {
+      "agent_id": "human_138",
+      "agent_type": "human",
+      "file": "human_138.pt",
+      "steps_survived": 1665,
+      "total_reward": -375.310020833337
+    },
+    {
+      "agent_id": "human_139",
+      "agent_type": "human",
+      "file": "human_139.pt",
+      "steps_survived": 1664,
+      "total_reward": -582.0995666666644
+    },
+    {
+      "agent_id": "human_140",
+      "agent_type": "human",
+      "file": "human_140.pt",
+      "steps_survived": 1664,
+      "total_reward": -319.6522458333375
+    },
+    {
+      "agent_id": "human_141",
+      "agent_type": "human",
+      "file": "human_141.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_142",
+      "agent_type": "human",
+      "file": "human_142.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_143",
+      "agent_type": "human",
+      "file": "human_143.pt",
+      "steps_survived": 1656,
+      "total_reward": -438.7213958333357
+    },
+    {
+      "agent_id": "animal_035",
+      "agent_type": "animal",
+      "file": "animal_035.pt",
+      "steps_survived": 1650,
+      "total_reward": -414.74862500000125
+    },
+    {
+      "agent_id": "human_144",
+      "agent_type": "human",
+      "file": "human_144.pt",
+      "steps_survived": 1640,
+      "total_reward": -311.275808333337
+    },
+    {
+      "agent_id": "animal_036",
+      "agent_type": "animal",
+      "file": "animal_036.pt",
+      "steps_survived": 1626,
+      "total_reward": -427.2793541666683
+    },
+    {
+      "agent_id": "animal_037",
+      "agent_type": "animal",
+      "file": "animal_037.pt",
+      "steps_survived": 1626,
+      "total_reward": -872.891345833334
+    },
+    {
+      "agent_id": "human_145",
+      "agent_type": "human",
+      "file": "human_145.pt",
+      "steps_survived": 253,
+      "total_reward": -35.561166666666686
+    },
+    {
+      "agent_id": "human_146",
+      "agent_type": "human",
+      "file": "human_146.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_147",
+      "agent_type": "human",
+      "file": "human_147.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_148",
+      "agent_type": "human",
+      "file": "human_148.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_149",
+      "agent_type": "human",
+      "file": "human_149.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_150",
+      "agent_type": "human",
+      "file": "human_150.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_151",
+      "agent_type": "human",
+      "file": "human_151.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_152",
+      "agent_type": "human",
+      "file": "human_152.pt",
+      "steps_survived": 1511,
+      "total_reward": -311.5019125000021
+    },
+    {
+      "agent_id": "human_153",
+      "agent_type": "human",
+      "file": "human_153.pt",
+      "steps_survived": 1511,
+      "total_reward": -365.64625000000547
+    },
+    {
+      "agent_id": "human_154",
+      "agent_type": "human",
+      "file": "human_154.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_155",
+      "agent_type": "human",
+      "file": "human_155.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_156",
+      "agent_type": "human",
+      "file": "human_156.pt",
+      "steps_survived": 1494,
+      "total_reward": -415.78083750000235
+    },
+    {
+      "agent_id": "human_157",
+      "agent_type": "human",
+      "file": "human_157.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_158",
+      "agent_type": "human",
+      "file": "human_158.pt",
+      "steps_survived": 1469,
+      "total_reward": -383.19989583333336
+    },
+    {
+      "agent_id": "animal_038",
+      "agent_type": "animal",
+      "file": "animal_038.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_159",
+      "agent_type": "human",
+      "file": "human_159.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_160",
+      "agent_type": "human",
+      "file": "human_160.pt",
+      "steps_survived": 1397,
+      "total_reward": -274.1570708333352
+    },
+    {
+      "agent_id": "human_161",
+      "agent_type": "human",
+      "file": "human_161.pt",
+      "steps_survived": 1390,
+      "total_reward": -554.4064791666696
+    },
+    {
+      "agent_id": "animal_039",
+      "agent_type": "animal",
+      "file": "animal_039.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_040",
+      "agent_type": "animal",
+      "file": "animal_040.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_162",
+      "agent_type": "human",
+      "file": "human_162.pt",
+      "steps_survived": 1382,
+      "total_reward": -277.39890833333425
+    },
+    {
+      "agent_id": "human_163",
+      "agent_type": "human",
+      "file": "human_163.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_164",
+      "agent_type": "human",
+      "file": "human_164.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_165",
+      "agent_type": "human",
+      "file": "human_165.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_166",
+      "agent_type": "human",
+      "file": "human_166.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_167",
+      "agent_type": "human",
+      "file": "human_167.pt",
+      "steps_survived": 1302,
+      "total_reward": -389.0674708333346
+    },
+    {
+      "agent_id": "human_168",
+      "agent_type": "human",
+      "file": "human_168.pt",
+      "steps_survived": 1296,
+      "total_reward": -319.6573041666682
+    },
+    {
+      "agent_id": "human_169",
+      "agent_type": "human",
+      "file": "human_169.pt",
+      "steps_survived": 238,
+      "total_reward": -24.595000000000006
+    },
+    {
+      "agent_id": "human_170",
+      "agent_type": "human",
+      "file": "human_170.pt",
+      "steps_survived": 1291,
+      "total_reward": -222.76273750000263
+    },
+    {
+      "agent_id": "human_171",
+      "agent_type": "human",
+      "file": "human_171.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_172",
+      "agent_type": "human",
+      "file": "human_172.pt",
+      "steps_survived": 1211,
+      "total_reward": -336.7357083333354
+    },
+    {
+      "agent_id": "human_173",
+      "agent_type": "human",
+      "file": "human_173.pt",
+      "steps_survived": 1211,
+      "total_reward": -526.7614041666682
+    },
+    {
+      "agent_id": "human_174",
+      "agent_type": "human",
+      "file": "human_174.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_175",
+      "agent_type": "human",
+      "file": "human_175.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_176",
+      "agent_type": "human",
+      "file": "human_176.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_177",
+      "agent_type": "human",
+      "file": "human_177.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_178",
+      "agent_type": "human",
+      "file": "human_178.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_179",
+      "agent_type": "human",
+      "file": "human_179.pt",
+      "steps_survived": 1193,
+      "total_reward": -338.52343750000034
+    },
+    {
+      "agent_id": "human_180",
+      "agent_type": "human",
+      "file": "human_180.pt",
+      "steps_survived": 1182,
+      "total_reward": -272.56585416666957
+    },
+    {
+      "agent_id": "human_181",
+      "agent_type": "human",
+      "file": "human_181.pt",
+      "steps_survived": 1137,
+      "total_reward": -417.8467041666684
+    },
+    {
+      "agent_id": "human_182",
+      "agent_type": "human",
+      "file": "human_182.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_183",
+      "agent_type": "human",
+      "file": "human_183.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_184",
+      "agent_type": "human",
+      "file": "human_184.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_185",
+      "agent_type": "human",
+      "file": "human_185.pt",
+      "steps_survived": 1105,
+      "total_reward": -311.17330833333494
+    },
+    {
+      "agent_id": "animal_041",
+      "agent_type": "animal",
+      "file": "animal_041.pt",
+      "steps_survived": 1095,
+      "total_reward": -444.0947875
+    },
+    {
+      "agent_id": "human_186",
+      "agent_type": "human",
+      "file": "human_186.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_042",
+      "agent_type": "animal",
+      "file": "animal_042.pt",
+      "steps_survived": 1068,
+      "total_reward": -646.8883291666663
+    },
+    {
+      "agent_id": "human_187",
+      "agent_type": "human",
+      "file": "human_187.pt",
+      "steps_survived": 1064,
+      "total_reward": -384.4775458333356
+    },
+    {
+      "agent_id": "human_188",
+      "agent_type": "human",
+      "file": "human_188.pt",
+      "steps_survived": 234,
+      "total_reward": -22.255000000000003
+    },
+    {
+      "agent_id": "human_189",
+      "agent_type": "human",
+      "file": "human_189.pt",
+      "steps_survived": 231,
+      "total_reward": -20.065000000000005
+    },
+    {
+      "agent_id": "human_190",
+      "agent_type": "human",
+      "file": "human_190.pt",
+      "steps_survived": 1061,
+      "total_reward": -259.4747083333337
+    },
+    {
+      "agent_id": "animal_043",
+      "agent_type": "animal",
+      "file": "animal_043.pt",
+      "steps_survived": 1058,
+      "total_reward": -669.5305250000018
+    },
+    {
+      "agent_id": "human_191",
+      "agent_type": "human",
+      "file": "human_191.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_192",
+      "agent_type": "human",
+      "file": "human_192.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_193",
+      "agent_type": "human",
+      "file": "human_193.pt",
+      "steps_survived": 1003,
+      "total_reward": -434.5635541666664
+    },
+    {
+      "agent_id": "human_194",
+      "agent_type": "human",
+      "file": "human_194.pt",
+      "steps_survived": 997,
+      "total_reward": -354.70352083333336
+    },
+    {
+      "agent_id": "human_195",
+      "agent_type": "human",
+      "file": "human_195.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_196",
+      "agent_type": "human",
+      "file": "human_196.pt",
+      "steps_survived": 974,
+      "total_reward": -281.6022125000006
+    },
+    {
+      "agent_id": "human_197",
+      "agent_type": "human",
+      "file": "human_197.pt",
+      "steps_survived": 974,
+      "total_reward": -475.70929583333464
+    },
+    {
+      "agent_id": "human_198",
+      "agent_type": "human",
+      "file": "human_198.pt",
+      "steps_survived": 974,
+      "total_reward": -370.21235833333407
+    },
+    {
+      "agent_id": "human_199",
+      "agent_type": "human",
+      "file": "human_199.pt",
+      "steps_survived": 972,
+      "total_reward": -356.46443333333315
+    },
+    {
+      "agent_id": "human_200",
+      "agent_type": "human",
+      "file": "human_200.pt",
+      "steps_survived": 959,
+      "total_reward": -211.2270250000001
+    },
+    {
+      "agent_id": "human_201",
+      "agent_type": "human",
+      "file": "human_201.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_202",
+      "agent_type": "human",
+      "file": "human_202.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_203",
+      "agent_type": "human",
+      "file": "human_203.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_204",
+      "agent_type": "human",
+      "file": "human_204.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_205",
+      "agent_type": "human",
+      "file": "human_205.pt",
+      "steps_survived": 911,
+      "total_reward": -317.20855416666836
+    },
+    {
+      "agent_id": "human_206",
+      "agent_type": "human",
+      "file": "human_206.pt",
+      "steps_survived": 888,
+      "total_reward": -202.86409583333403
+    },
+    {
+      "agent_id": "human_207",
+      "agent_type": "human",
+      "file": "human_207.pt",
+      "steps_survived": 245,
+      "total_reward": -27.630604166666686
+    },
+    {
+      "agent_id": "human_208",
+      "agent_type": "human",
+      "file": "human_208.pt",
+      "steps_survived": 886,
+      "total_reward": -395.0964874999994
+    },
+    {
+      "agent_id": "human_209",
+      "agent_type": "human",
+      "file": "human_209.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_210",
+      "agent_type": "human",
+      "file": "human_210.pt",
+      "steps_survived": 241,
+      "total_reward": -26.636250000000004
+    },
+    {
+      "agent_id": "animal_044",
+      "agent_type": "animal",
+      "file": "animal_044.pt",
+      "steps_survived": 879,
+      "total_reward": -496.22158333333385
+    },
+    {
+      "agent_id": "animal_045",
+      "agent_type": "animal",
+      "file": "animal_045.pt",
+      "steps_survived": 879,
+      "total_reward": -305.27933333333374
+    },
+    {
+      "agent_id": "animal_046",
+      "agent_type": "animal",
+      "file": "animal_046.pt",
+      "steps_survived": 856,
+      "total_reward": -168.82623750000064
+    },
+    {
+      "agent_id": "animal_047",
+      "agent_type": "animal",
+      "file": "animal_047.pt",
+      "steps_survived": 856,
+      "total_reward": -273.345758333334
+    },
+    {
+      "agent_id": "human_211",
+      "agent_type": "human",
+      "file": "human_211.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_212",
+      "agent_type": "human",
+      "file": "human_212.pt",
+      "steps_survived": 236,
+      "total_reward": -23.81275000000001
+    },
+    {
+      "agent_id": "human_213",
+      "agent_type": "human",
+      "file": "human_213.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_214",
+      "agent_type": "human",
+      "file": "human_214.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_048",
+      "agent_type": "animal",
+      "file": "animal_048.pt",
+      "steps_survived": 791,
+      "total_reward": -424.52005000000116
+    },
+    {
+      "agent_id": "animal_049",
+      "agent_type": "animal",
+      "file": "animal_049.pt",
+      "steps_survived": 791,
+      "total_reward": -342.241066666667
+    },
+    {
+      "agent_id": "animal_050",
+      "agent_type": "animal",
+      "file": "animal_050.pt",
+      "steps_survived": 790,
+      "total_reward": -183.94137083333317
+    },
+    {
+      "agent_id": "human_215",
+      "agent_type": "human",
+      "file": "human_215.pt",
+      "steps_survived": 785,
+      "total_reward": -169.1080500000007
+    },
+    {
+      "agent_id": "human_216",
+      "agent_type": "human",
+      "file": "human_216.pt",
+      "steps_survived": 779,
+      "total_reward": -215.36483333333345
+    },
+    {
+      "agent_id": "human_217",
+      "agent_type": "human",
+      "file": "human_217.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_218",
+      "agent_type": "human",
+      "file": "human_218.pt",
+      "steps_survived": 775,
+      "total_reward": -234.35833333333386
+    },
+    {
+      "agent_id": "human_219",
+      "agent_type": "human",
+      "file": "human_219.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_220",
+      "agent_type": "human",
+      "file": "human_220.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_221",
+      "agent_type": "human",
+      "file": "human_221.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_222",
+      "agent_type": "human",
+      "file": "human_222.pt",
+      "steps_survived": 728,
+      "total_reward": -301.3037333333336
+    },
+    {
+      "agent_id": "human_223",
+      "agent_type": "human",
+      "file": "human_223.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_224",
+      "agent_type": "human",
+      "file": "human_224.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_225",
+      "agent_type": "human",
+      "file": "human_225.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_226",
+      "agent_type": "human",
+      "file": "human_226.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_227",
+      "agent_type": "human",
+      "file": "human_227.pt",
+      "steps_survived": 675,
+      "total_reward": -380.2905041666664
+    },
+    {
+      "agent_id": "human_228",
+      "agent_type": "human",
+      "file": "human_228.pt",
+      "steps_survived": 675,
+      "total_reward": -277.8646125000011
+    },
+    {
+      "agent_id": "human_229",
+      "agent_type": "human",
+      "file": "human_229.pt",
+      "steps_survived": 658,
+      "total_reward": -245.25058333333368
+    },
+    {
+      "agent_id": "human_230",
+      "agent_type": "human",
+      "file": "human_230.pt",
+      "steps_survived": 658,
+      "total_reward": -222.1005000000004
+    },
+    {
+      "agent_id": "human_231",
+      "agent_type": "human",
+      "file": "human_231.pt",
+      "steps_survived": 639,
+      "total_reward": -249.34416250000066
+    },
+    {
+      "agent_id": "human_232",
+      "agent_type": "human",
+      "file": "human_232.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_233",
+      "agent_type": "human",
+      "file": "human_233.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_234",
+      "agent_type": "human",
+      "file": "human_234.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_235",
+      "agent_type": "human",
+      "file": "human_235.pt",
+      "steps_survived": 591,
+      "total_reward": -241.340195833333
+    },
+    {
+      "agent_id": "human_236",
+      "agent_type": "human",
+      "file": "human_236.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_237",
+      "agent_type": "human",
+      "file": "human_237.pt",
+      "steps_survived": 586,
+      "total_reward": -164.08571666666688
+    },
+    {
+      "agent_id": "human_238",
+      "agent_type": "human",
+      "file": "human_238.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_239",
+      "agent_type": "human",
+      "file": "human_239.pt",
+      "steps_survived": 565,
+      "total_reward": -271.2818750000004
+    },
+    {
+      "agent_id": "human_240",
+      "agent_type": "human",
+      "file": "human_240.pt",
+      "steps_survived": 555,
+      "total_reward": -172.92459166666725
+    },
+    {
+      "agent_id": "human_241",
+      "agent_type": "human",
+      "file": "human_241.pt",
+      "steps_survived": 221,
+      "total_reward": -14.184999999999997
+    },
+    {
+      "agent_id": "human_242",
+      "agent_type": "human",
+      "file": "human_242.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_243",
+      "agent_type": "human",
+      "file": "human_243.pt",
+      "steps_survived": 511,
+      "total_reward": -210.6357958333336
+    },
+    {
+      "agent_id": "human_244",
+      "agent_type": "human",
+      "file": "human_244.pt",
+      "steps_survived": 504,
+      "total_reward": -140.70997916666667
+    },
+    {
+      "agent_id": "animal_051",
+      "agent_type": "animal",
+      "file": "animal_051.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_245",
+      "agent_type": "human",
+      "file": "human_245.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_246",
+      "agent_type": "human",
+      "file": "human_246.pt",
+      "steps_survived": 233,
+      "total_reward": -21.385000000000005
+    },
+    {
+      "agent_id": "human_247",
+      "agent_type": "human",
+      "file": "human_247.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_248",
+      "agent_type": "human",
+      "file": "human_248.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_249",
+      "agent_type": "human",
+      "file": "human_249.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_250",
+      "agent_type": "human",
+      "file": "human_250.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_251",
+      "agent_type": "human",
+      "file": "human_251.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_252",
+      "agent_type": "human",
+      "file": "human_252.pt",
+      "steps_survived": 448,
+      "total_reward": -183.8052333333334
+    },
+    {
+      "agent_id": "animal_052",
+      "agent_type": "animal",
+      "file": "animal_052.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_253",
+      "agent_type": "human",
+      "file": "human_253.pt",
+      "steps_survived": 431,
+      "total_reward": -144.82702500000005
+    },
+    {
+      "agent_id": "human_254",
+      "agent_type": "human",
+      "file": "human_254.pt",
+      "steps_survived": 431,
+      "total_reward": -166.6712958333337
+    },
+    {
+      "agent_id": "human_255",
+      "agent_type": "human",
+      "file": "human_255.pt",
+      "steps_survived": 424,
+      "total_reward": -151.9965833333333
+    },
+    {
+      "agent_id": "human_256",
+      "agent_type": "human",
+      "file": "human_256.pt",
+      "steps_survived": 419,
+      "total_reward": -164.52645416666672
+    },
+    {
+      "agent_id": "human_257",
+      "agent_type": "human",
+      "file": "human_257.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_258",
+      "agent_type": "human",
+      "file": "human_258.pt",
+      "steps_survived": 405,
+      "total_reward": -131.4090125000002
+    },
+    {
+      "agent_id": "human_259",
+      "agent_type": "human",
+      "file": "human_259.pt",
+      "steps_survived": 405,
+      "total_reward": -127.02037500000021
+    },
+    {
+      "agent_id": "human_260",
+      "agent_type": "human",
+      "file": "human_260.pt",
+      "steps_survived": 233,
+      "total_reward": -23.200250000000004
+    },
+    {
+      "agent_id": "human_261",
+      "agent_type": "human",
+      "file": "human_261.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_262",
+      "agent_type": "human",
+      "file": "human_262.pt",
+      "steps_survived": 399,
+      "total_reward": -140.43427916666704
+    },
+    {
+      "agent_id": "human_263",
+      "agent_type": "human",
+      "file": "human_263.pt",
+      "steps_survived": 385,
+      "total_reward": -146.7202333333335
+    },
+    {
+      "agent_id": "human_264",
+      "agent_type": "human",
+      "file": "human_264.pt",
+      "steps_survived": 385,
+      "total_reward": -160.28056666666677
+    },
+    {
+      "agent_id": "human_265",
+      "agent_type": "human",
+      "file": "human_265.pt",
+      "steps_survived": 367,
+      "total_reward": -115.24905000000017
+    },
+    {
+      "agent_id": "human_266",
+      "agent_type": "human",
+      "file": "human_266.pt",
+      "steps_survived": 366,
+      "total_reward": -100.80132083333339
+    },
+    {
+      "agent_id": "human_267",
+      "agent_type": "human",
+      "file": "human_267.pt",
+      "steps_survived": 347,
+      "total_reward": -116.08708333333342
+    },
+    {
+      "agent_id": "human_268",
+      "agent_type": "human",
+      "file": "human_268.pt",
+      "steps_survived": 340,
+      "total_reward": -75.57486250000011
+    },
+    {
+      "agent_id": "human_269",
+      "agent_type": "human",
+      "file": "human_269.pt",
+      "steps_survived": 340,
+      "total_reward": -102.07306666666673
+    },
+    {
+      "agent_id": "human_270",
+      "agent_type": "human",
+      "file": "human_270.pt",
+      "steps_survived": 338,
+      "total_reward": -39.19397500000011
+    },
+    {
+      "agent_id": "human_271",
+      "agent_type": "human",
+      "file": "human_271.pt",
+      "steps_survived": 335,
+      "total_reward": -89.68841250000008
+    },
+    {
+      "agent_id": "human_272",
+      "agent_type": "human",
+      "file": "human_272.pt",
+      "steps_survived": 335,
+      "total_reward": -112.14020416666665
+    },
+    {
+      "agent_id": "animal_053",
+      "agent_type": "animal",
+      "file": "animal_053.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_273",
+      "agent_type": "human",
+      "file": "human_273.pt",
+      "steps_survived": 327,
+      "total_reward": -74.64653750000016
+    },
+    {
+      "agent_id": "animal_054",
+      "agent_type": "animal",
+      "file": "animal_054.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_274",
+      "agent_type": "human",
+      "file": "human_274.pt",
+      "steps_survived": 317,
+      "total_reward": -101.69930000000008
+    },
+    {
+      "agent_id": "human_275",
+      "agent_type": "human",
+      "file": "human_275.pt",
+      "steps_survived": 317,
+      "total_reward": -96.75082083333335
+    },
+    {
+      "agent_id": "human_276",
+      "agent_type": "human",
+      "file": "human_276.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_277",
+      "agent_type": "human",
+      "file": "human_277.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_278",
+      "agent_type": "human",
+      "file": "human_278.pt",
+      "steps_survived": 287,
+      "total_reward": -45.14784166666672
+    },
+    {
+      "agent_id": "human_279",
+      "agent_type": "human",
+      "file": "human_279.pt",
+      "steps_survived": 287,
+      "total_reward": -70.26360000000003
+    },
+    {
+      "agent_id": "human_280",
+      "agent_type": "human",
+      "file": "human_280.pt",
+      "steps_survived": 287,
+      "total_reward": -51.94672083333342
+    },
+    {
+      "agent_id": "human_281",
+      "agent_type": "human",
+      "file": "human_281.pt",
+      "steps_survived": 263,
+      "total_reward": 6.30403749999998
+    },
+    {
+      "agent_id": "human_282",
+      "agent_type": "human",
+      "file": "human_282.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_283",
+      "agent_type": "human",
+      "file": "human_283.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_055",
+      "agent_type": "animal",
+      "file": "animal_055.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_284",
+      "agent_type": "human",
+      "file": "human_284.pt",
+      "steps_survived": 232,
+      "total_reward": -16.795000000000005
+    },
+    {
+      "agent_id": "human_285",
+      "agent_type": "human",
+      "file": "human_285.pt",
+      "steps_survived": 232,
+      "total_reward": -16.795000000000005
+    },
+    {
+      "agent_id": "human_286",
+      "agent_type": "human",
+      "file": "human_286.pt",
+      "steps_survived": 232,
+      "total_reward": -16.795000000000005
+    },
+    {
+      "agent_id": "human_287",
+      "agent_type": "human",
+      "file": "human_287.pt",
+      "steps_survived": 228,
+      "total_reward": -2.6786999999999996
+    },
+    {
+      "agent_id": "human_288",
+      "agent_type": "human",
+      "file": "human_288.pt",
+      "steps_survived": 222,
+      "total_reward": -10.395
+    },
+    {
+      "agent_id": "human_289",
+      "agent_type": "human",
+      "file": "human_289.pt",
+      "steps_survived": 206,
+      "total_reward": -0.9899999999999989
+    },
+    {
+      "agent_id": "human_290",
+      "agent_type": "human",
+      "file": "human_290.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_291",
+      "agent_type": "human",
+      "file": "human_291.pt",
+      "steps_survived": 203,
+      "total_reward": 3.576666666666666
+    },
+    {
+      "agent_id": "human_292",
+      "agent_type": "human",
+      "file": "human_292.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_056",
+      "agent_type": "animal",
+      "file": "animal_056.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "animal_057",
+      "agent_type": "animal",
+      "file": "animal_057.pt",
+      "steps_survived": 169,
+      "total_reward": -3.3199999999999985
+    },
+    {
+      "agent_id": "human_293",
+      "agent_type": "human",
+      "file": "human_293.pt",
+      "steps_survived": 172,
+      "total_reward": 1.7200000000000013
+    },
+    {
+      "agent_id": "human_294",
+      "agent_type": "human",
+      "file": "human_294.pt",
+      "steps_survived": 172,
+      "total_reward": 1.7200000000000013
+    },
+    {
+      "agent_id": "human_295",
+      "agent_type": "human",
+      "file": "human_295.pt",
+      "steps_survived": 170,
+      "total_reward": 1.7000000000000013
+    },
+    {
+      "agent_id": "human_296",
+      "agent_type": "human",
+      "file": "human_296.pt",
+      "steps_survived": 158,
+      "total_reward": 1.5800000000000012
+    },
+    {
+      "agent_id": "animal_058",
+      "agent_type": "animal",
+      "file": "animal_058.pt",
+      "steps_survived": 120,
+      "total_reward": 1.2000000000000008
+    },
+    {
+      "agent_id": "animal_059",
+      "agent_type": "animal",
+      "file": "animal_059.pt",
+      "steps_survived": 120,
+      "total_reward": 1.2000000000000008
+    },
+    {
+      "agent_id": "human_297",
+      "agent_type": "human",
+      "file": "human_297.pt",
+      "steps_survived": 120,
+      "total_reward": 1.2000000000000008
+    },
+    {
+      "agent_id": "human_298",
+      "agent_type": "human",
+      "file": "human_298.pt",
+      "steps_survived": 106,
+      "total_reward": 1.0600000000000007
+    },
+    {
+      "agent_id": "human_299",
+      "agent_type": "human",
+      "file": "human_299.pt",
+      "steps_survived": 73,
+      "total_reward": 0.7300000000000004
+    },
+    {
+      "agent_id": "human_300",
+      "agent_type": "human",
+      "file": "human_300.pt",
+      "steps_survived": 65,
+      "total_reward": 0.6500000000000004
+    },
+    {
+      "agent_id": "human_301",
+      "agent_type": "human",
+      "file": "human_301.pt",
+      "steps_survived": 65,
+      "total_reward": 0.6500000000000004
+    },
+    {
+      "agent_id": "human_302",
+      "agent_type": "human",
+      "file": "human_302.pt",
+      "steps_survived": 55,
+      "total_reward": 0.5500000000000003
+    },
+    {
+      "agent_id": "human_303",
+      "agent_type": "human",
+      "file": "human_303.pt",
+      "steps_survived": 55,
+      "total_reward": 0.5500000000000003
+    },
+    {
+      "agent_id": "human_304",
+      "agent_type": "human",
+      "file": "human_304.pt",
+      "steps_survived": 34,
+      "total_reward": 0.34000000000000014
+    },
+    {
+      "agent_id": "human_305",
+      "agent_type": "human",
+      "file": "human_305.pt",
+      "steps_survived": 34,
+      "total_reward": 0.34000000000000014
+    },
+    {
+      "agent_id": "human_306",
+      "agent_type": "human",
+      "file": "human_306.pt",
+      "steps_survived": 18,
+      "total_reward": 0.18000000000000002
+    },
+    {
+      "agent_id": "human_307",
+      "agent_type": "human",
+      "file": "human_307.pt",
+      "steps_survived": 18,
+      "total_reward": 0.18000000000000002
+    },
+    {
+      "agent_id": "human_308",
+      "agent_type": "human",
+      "file": "human_308.pt",
+      "steps_survived": 18,
+      "total_reward": 0.18000000000000002
+    },
+    {
+      "agent_id": "human_309",
+      "agent_type": "human",
+      "file": "human_309.pt",
+      "steps_survived": 13,
+      "total_reward": 0.12999999999999998
+    },
+    {
+      "agent_id": "human_310",
+      "agent_type": "human",
+      "file": "human_310.pt",
+      "steps_survived": 13,
+      "total_reward": 0.12999999999999998
+    },
+    {
+      "agent_id": "human_311",
+      "agent_type": "human",
+      "file": "human_311.pt",
+      "steps_survived": 13,
+      "total_reward": 0.12999999999999998
+    },
+    {
+      "agent_id": "human_312",
+      "agent_type": "human",
+      "file": "human_312.pt",
+      "steps_survived": 12,
+      "total_reward": 0.11999999999999998
     }
   ]
 }

@@ -25,6 +25,11 @@ def calculate_reward(
     gathering_progress: float = 0.0,
     maternal_care_penalty: float = 0.0,
     baby_starvation_penalty: float = 0.0,
+    wood_gather_reward: float = 0.0,
+    house_build_reward: float = 0.0,
+    house_completion_reward: float = 0.0,
+    construction_progress: float = 0.0,
+    sheltered_rest_reward: float = 0.0,
 ) -> RewardResult:
     """Small, inspectable reward vocabulary; no action policy is encoded here."""
     components: dict[str, float] = {"survival": 0.01}
@@ -58,6 +63,16 @@ def calculate_reward(
         components["mated"] = mating_reward
     if gathering_progress:
         components["gathering_progress"] = gathering_progress
+    if wood_gather_reward > 0.0:
+        components["gathered_wood"] = wood_gather_reward
+    if house_build_reward > 0.0:
+        components["built_group_house"] = house_build_reward
+    if house_completion_reward > 0.0:
+        components["completed_group_house"] = house_completion_reward
+    if construction_progress:
+        components["construction_progress"] = construction_progress
+    if sheltered_rest_reward > 0.0:
+        components["rested_in_group_house"] = sheltered_rest_reward
     if maternal_care_penalty > 0.0:
         components["hungry_dependent_baby"] = -maternal_care_penalty
     if baby_starvation_penalty > 0.0:

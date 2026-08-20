@@ -81,31 +81,37 @@
     </section>
 
     <section class="workspace">
-      <div class="world-column">
-        <article class="panel world-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">MUNDO</p>
-              <h2>Cuadrícula viva</h2>
-            </div>
-            <div class="legend">
-              <span><i class="legend-human"></i>Humano F / M</span>
-              <span><i class="legend-animal"></i>Presa</span>
-              <span><i class="legend-predator"></i>Depredador</span>
-              <span><i class="legend-baby"></i>Cría</span>
-              <span><i class="legend-food"></i>Comida</span>
-              <span><i class="legend-stockpile"></i>Reserva</span>
-              <span><i class="legend-water"></i>Agua</span>
-            </div>
+      <article class="panel world-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">MUNDO</p>
+            <h2>Cuadrícula viva</h2>
           </div>
-          <canvas id="world" class="world" width="720" height="480" aria-label="Matriz del mundo LifeSim"></canvas>
-          <p class="world-hint">Corazón: vínculo · Vientre amarillo: embarazo · Cesta: comida transportada · Barra naranja/roja: hambre · Los campamentos crecen con sus reservas. Selecciona un agente para inspeccionar su brain.</p>
-        </article>
+          <div class="legend">
+            <span><i class="legend-human"></i>Humano F / M</span>
+            <span><i class="legend-animal"></i>Presa</span>
+            <span><i class="legend-predator"></i>Depredador</span>
+            <span><i class="legend-baby"></i>Cría</span>
+            <span><i class="legend-food"></i>Comida</span>
+            <span><i class="legend-stockpile"></i>Reserva</span>
+            <span><i class="legend-water"></i>Agua</span>
+            <span><i class="legend-tree"></i>Árbol / madera</span>
+            <span><i class="legend-house"></i>Casa grupal</span>
+            <span><i class="legend-grass"></i>Pasto</span>
+            <span><i class="legend-earth"></i>Tierra</span>
+            <span><i class="legend-forest"></i>Bosque</span>
+          </div>
+        </div>
+        <canvas id="world" class="world" width="1200" height="800" aria-label="Matriz del mundo LifeSim"></canvas>
+        <div id="house-status" class="house-status" aria-label="Progreso de casas grupales"></div>
+        <p class="world-hint">Corazón: vínculo · Cesta: comida · Troncos: madera · Cimientos: obra común · Zona azul: refugio sin ataques de depredadores, regeneración de energía y descanso reforzado · Barra naranja/roja: hambre. Selecciona un agente para inspeccionar su brain.</p>
+      </article>
 
+      <div class="world-column">
         <div class="metric-grid">
           <article class="metric-card"><span>Humanos vivos</span><strong id="humans-alive">—</strong></article>
           <article class="metric-card"><span>Animales vivos</span><strong id="animals-alive">—</strong></article>
-          <article class="metric-card"><span>Comida / agua</span><strong id="resources-count">—</strong></article>
+          <article class="metric-card"><span>Comida / agua / madera</span><strong id="resources-count">—</strong></article>
           <article class="metric-card"><span>Loss promedio</span><strong id="average-loss">—</strong></article>
         </div>
 

@@ -21,9 +21,9 @@ class BrainConfig:
 
 @dataclass(slots=True)
 class SimulationConfig:
-    reward_version: int = 8
+    reward_version: int = 10
     brain_architecture_version: int = 2
-    # A denser matrix gives the agents more room without making the web panel larger.
+    # Simulation dimensions stay independent from the web canvas display size.
     grid_width: int = 60
     grid_height: int = 40
     num_humans: int = 5
@@ -72,6 +72,16 @@ class SimulationConfig:
     gather_deposit_reward: float = 0.60
     gather_progress_reward: float = 0.08
     gather_regress_penalty: float = 0.04
+    wood_capacity: int = 1
+    house_materials_required: int = 8
+    wood_gather_reward: float = 0.20
+    house_build_reward: float = 0.35
+    house_completion_reward: float = 1.50
+    construction_progress_reward: float = 0.08
+    construction_regress_penalty: float = 0.04
+    house_passive_energy_gain: float = 0.01
+    house_rest_multiplier: float = 2.0
+    sheltered_rest_reward: float = 0.30
     baby_feed_reward: float = 0.40
     maternal_baby_hunger_penalty_scale: float = 1.50
     maternal_baby_starvation_penalty: float = 5.0
@@ -126,6 +136,12 @@ class SimulationConfig:
             raise ValueError("food_respawn_probability must be between 0 and 1")
         if self.gather_capacity <= 0:
             raise ValueError("gather_capacity must be positive")
+        if self.wood_capacity <= 0 or self.house_materials_required <= 0:
+            raise ValueError("Wood capacity and house material cost must be positive")
+        if self.house_rest_multiplier < 1.0:
+            raise ValueError("House rest multiplier cannot be less than one")
+        if self.house_passive_energy_gain < 0.0:
+            raise ValueError("House passive energy gain cannot be negative")
         if not 0.0 < self.gathering_hunger_limit < 1.0:
             raise ValueError("gathering_hunger_limit must be between 0 and 1")
         if min(self.courtship_ticks, self.pregnancy_ticks, self.dependent_baby_ticks) <= 0:

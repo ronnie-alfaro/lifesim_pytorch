@@ -37,6 +37,7 @@ class BaseAgent:
     alive: bool = True
     cause_of_death: str | None = None
     carried_food: int = 0
+    carried_wood: int = 0
     heart_partner_id: str | None = None
     heart_ticks_remaining: int = 0
     pregnant_by_id: str | None = None
@@ -137,7 +138,7 @@ class BaseAgent:
         ]
 
     def social_observation(self, world: "World") -> list[float]:
-        """Observable gathering and family state for learned social actions."""
+        """Observable gathering, communal construction and family state."""
         stockpile = world.stockpile_for(self)
         if stockpile is None:
             stock_dx = stock_dy = stock_food = stock_reach = 0.0
@@ -146,6 +147,22 @@ class BaseAgent:
             stock_dy = (stockpile.y - self.y) / max(1, world.height - 1)
             stock_food = min(1.0, stockpile.food / max(1, len(world.living_agents)))
             stock_reach = float(world.position_in_reach(self, stockpile.position))
+        house = world.house_for(self)
+        tree = world.nearest_tree_position(self)
+        if tree is None:
+            tree_dx = tree_dy = 0.0
+        else:
+            tree_dx = (tree[0] - self.x) / max(1, world.width - 1)
+            tree_dy = (tree[1] - self.y) / max(1, world.height - 1)
+        if house is None:
+            house_dx = house_dy = house_progress = house_reach = 0.0
+            house_complete = 0.0
+        else:
+            house_dx = (house.x - self.x) / max(1, world.width - 1)
+            house_dy = (house.y - self.y) / max(1, world.height - 1)
+            house_progress = house.progress
+            house_complete = float(house.complete)
+            house_reach = float(world.position_in_reach(self, house.position))
         return [
             self.carried_food / max(1, self.config.gather_capacity),
             stock_dx,
@@ -158,6 +175,15 @@ class BaseAgent:
             float(bool(self.dependent_ids)),
             world.max_dependent_hunger(self),
             float(self.dependent_ticks_remaining > 0),
+            tree_dx,
+            tree_dy,
+            float(world.tree_in_reach(self)),
+            self.carried_wood / max(1, self.config.wood_capacity),
+            house_dx,
+            house_dy,
+            house_progress,
+            house_complete,
+            house_reach,
         ]
 
     def choose_action(
@@ -230,14 +256,23 @@ class BaseAgent:
         )
         return "standard", epsilon
 
-    def update_biology(self, rested: bool = False) -> tuple[float, bool]:
+    def update_biology(
+        self,
+        rested: bool = False,
+        rest_multiplier: float = 1.0,
+        shelter_energy_gain: float = 0.0,
+    ) -> tuple[float, bool]:
         """Advance needs and return (health_delta, died_this_tick)."""
         old_health = self.health
         self.age += 1
         self.steps_survived += 1
         self.hunger = min(1.0, self.hunger + self.config.hunger_per_tick)
         self.thirst = min(1.0, self.thirst + self.config.thirst_per_tick)
-        energy_change = self.config.rest_energy_gain if rested else -self.config.energy_per_tick
+        energy_change = (
+            self.config.rest_energy_gain * rest_multiplier
+            if rested else -self.config.energy_per_tick
+        )
+        energy_change += shelter_energy_gain
         self.energy = min(1.0, max(0.0, self.energy + energy_change))
         death_causes: list[str] = []
         if self.hunger >= 1.0:

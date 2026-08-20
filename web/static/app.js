@@ -1,4 +1,4 @@
-const ACTIONS = ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT", "EAT", "DRINK", "REST", "WAIT", "ATTACK", "GATHER", "MATE"];
+const ACTIONS = ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT", "EAT", "DRINK", "REST", "WAIT", "ATTACK", "GATHER", "MATE", "BUILD"];
 const MOVEMENT_ACTIONS = new Set(["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT"]);
 const WORLD_CELL_SIZE = 20;
 
@@ -17,7 +17,7 @@ const ui = Object.fromEntries([
   "agent-details", "rpg-profile", "rpg-avatar", "rpg-title", "favorite-action", "agent-story", "rpg-facts", "vitals", "agent-action",
   "agent-reward", "agent-loss", "agent-mode", "agent-replay", "agent-updates", "epsilon-explanation",
   "brain-network", "brain-network-caption", "brain-view-label", "spatial-memory",
-  "q-values", "observations", "reward-components", "event-stream", "toast"
+  "q-values", "observations", "reward-components", "event-stream", "house-status", "toast"
 ].map(id => [id, document.getElementById(id)]));
 
 let state = null;
@@ -87,7 +87,7 @@ function render() {
   const summary = state.summary;
   ui["humans-alive"].textContent = `${summary.living_humans} / ${state.agents.filter(agent => agent.type === "human").length}`;
   ui["animals-alive"].textContent = `${summary.living_animals} / ${state.agents.filter(agent => agent.type === "animal").length}`;
-  ui["resources-count"].textContent = `${summary.food_remaining} / ${summary.water_remaining}`;
+  ui["resources-count"].textContent = `${summary.food_remaining} / ${summary.water_remaining} / ${summary.wood_remaining ?? state.grid.trees.length}`;
   ui["average-loss"].textContent = summary.average_loss == null ? "—" : format(summary.average_loss, 4);
   renderWorld();
   renderInspector();
@@ -144,11 +144,11 @@ function updateBuilderLabels() {
   ui["animal-count-label"].textContent = animals;
   ui["human-brain-label"].textContent = `${humanWidth} neuronas/capa`;
   ui["animal-brain-label"].textContent = `${animalWidth} neuronas`;
-  ui["architecture-preview"].textContent = `Humano: supervivencia 15→${Math.max(8, humanWidth / 2)}, espacio social 29→${humanWidth}, fusión ${humanWidth}→11 · Animal: supervivencia 15, espacio social 27→${animalWidth} · ${humans + animals} brains v2`;
+  ui["architecture-preview"].textContent = `Humano: supervivencia 15→${Math.max(8, humanWidth / 2)}, espacio social 38→${humanWidth}, fusión ${humanWidth}→12 · Animal: supervivencia 15, espacio social 36→${animalWidth} · ${humans + animals} brains v2`;
 }
 
 function renderWorld() {
-  const {width, height, food, water, obstacles, stockpiles = []} = state.grid;
+  const {width, height, food, water, obstacles, terrain = [], trees = [], stockpiles = [], houses = []} = state.grid;
   const canvas = ui.world;
   const cellSize = WORLD_CELL_SIZE;
   canvas.width = width * cellSize;
@@ -162,16 +162,38 @@ function renderWorld() {
   for (const [x, y] of obstacles) matrix[y][x] = 1;
   for (const [x, y] of food) matrix[y][x] = 2;
   for (const [x, y] of water) matrix[y][x] = 3;
-  const paths = buildVillagePaths(width, height, stockpiles);
+  const paths = buildVillagePaths(width, height, stockpiles, houses);
+  const treeMap = new Map(trees.map(tree => [`${tree.x},${tree.y}`, Number(tree.variant || 0)]));
 
   context.fillStyle = "#ced8b7";
   context.fillRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      drawMatrixCell(context, matrix[y][x], x, y, cellSize, matrix, paths.has(`${x},${y}`), state.tick);
+      drawMatrixCell(
+        context,
+        matrix[y][x],
+        x,
+        y,
+        cellSize,
+        matrix,
+        terrain,
+        paths.has(`${x},${y}`),
+        treeMap.get(`${x},${y}`),
+        state.tick,
+      );
     }
   }
+  for (const house of houses) drawHouseShelterZone(context, house, cellSize);
+  const stockpileByType = new Map(stockpiles.map(stockpile => [stockpile.type, stockpile]));
   for (const stockpile of stockpiles) drawStockpile(context, stockpile, cellSize, state.tick);
+  for (const house of houses) drawGroupHouse(
+    context, house, cellSize, stockpileByType.get(house.type),
+  );
+  ui["house-status"].innerHTML = houses.map(house => `
+    <span class="${house.complete ? "complete" : ""}">
+      ${house.type === "human" ? "Casa humana" : "Refugio animal"}: ${house.materials}/${house.required_materials}${house.complete ? " · zona segura · energía +" : ""}
+    </span>
+  `).join("");
   const detailed = state.agents.length <= 600;
   const agents = [...state.agents].sort((first, second) => {
     const layer = agent => agent.id === selectedAgentId ? 4 : !agent.alive ? 0 : agent.dependent_ticks_remaining > 0 ? 3 : 2;
@@ -182,13 +204,18 @@ function renderWorld() {
   }
 }
 
-function buildVillagePaths(width, height, stockpiles) {
+function buildVillagePaths(width, height, stockpiles, houses = []) {
   const paths = new Set();
+  const houseByType = new Map(houses.map(house => [house.type, house]));
   const add = (x, y) => {
     if (x >= 0 && y >= 0 && x < width && y < height) paths.add(`${x},${y}`);
   };
   for (const stockpile of stockpiles) {
-    const radius = 2 + Math.min(4, Math.floor(Number(stockpile.food || 0) / 2));
+    const house = houseByType.get(stockpile.type);
+    const radius = 2 + Math.min(4, Math.max(
+      Math.floor(Number(stockpile.food || 0) / 2),
+      Math.floor(Number(house?.progress || 0) * 4),
+    ));
     for (let step = -radius; step <= radius; step += 1) {
       add(stockpile.x + step, stockpile.y);
       add(stockpile.x, stockpile.y + step);
@@ -207,6 +234,59 @@ function buildVillagePaths(width, height, stockpiles) {
     for (let y = top; y <= bottom; y += 1) add(second.x, y);
   }
   return paths;
+}
+
+function drawGroupHouse(context, house, size, stockpile = {}) {
+  const px = house.x * size;
+  const py = house.y * size;
+  const progress = Number(house.progress || 0);
+  context.fillStyle = "rgba(58,42,29,.22)";
+  context.fillRect(px - 1, py + 17, 22, 3);
+  if (!house.complete) {
+    context.fillStyle = "#8a623d";
+    context.fillRect(px + 1, py + 15, 18, 3);
+    const posts = Math.max(1, Math.ceil(progress * 4));
+    for (let index = 0; index < posts; index += 1) {
+      context.fillRect(px + 2 + index * 5, py + 7, 2, 9);
+    }
+    context.fillStyle = "#f3df9c";
+    context.fillRect(px + 2, py + 2, Math.max(2, Math.round(16 * progress)), 2);
+    return;
+  }
+  context.fillStyle = house.type === "human" ? "#d9c08d" : "#b7a879";
+  context.fillRect(px + 2, py + 8, 16, 10);
+  context.fillStyle = house.type === "human" ? "#8f553c" : "#657443";
+  context.beginPath();
+  context.moveTo(px, py + 9);
+  context.lineTo(px + 10, py);
+  context.lineTo(px + 20, py + 9);
+  context.fill();
+  context.fillStyle = "#5d412d";
+  context.fillRect(px + 8, py + 11, 5, 7);
+  context.fillStyle = "#f4d77b";
+  context.fillRect(px + 4, py + 10, 3, 3);
+  context.fillStyle = "#5a83a1";
+  context.fillRect(px + 15, py + 10, 3, 4);
+  context.fillStyle = "#d9edf4";
+  context.fillRect(px + 16, py + 11, 1, 2);
+  context.fillStyle = "#6f4c2d";
+  context.fillRect(px + 1, py + 14, 6, 4);
+  context.fillStyle = "#b9854e";
+  context.fillRect(px + 2, py + 14, 4, 1);
+  const storedFood = Number(stockpile.food || 0);
+  if (storedFood > 0) {
+    context.fillStyle = "#fff3bd";
+    context.font = "bold 6px monospace";
+    context.fillText(String(storedFood), px + 2, py + 13);
+  }
+}
+
+function drawHouseShelterZone(context, house, size) {
+  if (!house.complete) return;
+  context.fillStyle = "rgba(73,132,160,.14)";
+  for (const [dx, dy] of [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    context.fillRect((house.x + dx) * size, (house.y + dy) * size, size, size);
+  }
 }
 
 function drawStockpile(context, stockpile, size, tick) {
@@ -255,17 +335,23 @@ function drawStockpile(context, stockpile, size, tick) {
   }
 }
 
-function drawMatrixCell(context, value, x, y, size, matrix, path, tick) {
+function drawMatrixCell(context, value, x, y, size, matrix, terrainMap, path, treeVariant, tick) {
   const px = x * size;
   const py = y * size;
   const hash = (x * 37 + y * 61) % 97;
-  context.fillStyle = path ? ((x + y) % 2 ? "#bfa97d" : "#c7b489") : (hash % 3 === 0 ? "#d5dfbd" : "#cfdbb7");
+  const terrain = terrainMap[y]?.[x] || "grassland";
+  const palette = {
+    grassland: hash % 3 === 0 ? "#c8dba5" : "#bfd39b",
+    earth: hash % 3 === 0 ? "#d5bd82" : "#ccb277",
+    forest: hash % 3 === 0 ? "#91b27b" : "#86a96f",
+  };
+  context.fillStyle = path ? ((x + y) % 2 ? "#b9a174" : "#c4ae80") : palette[terrain];
   context.fillRect(px, py, size, size);
   if (path) {
     context.fillStyle = "rgba(105,78,48,.13)";
     context.fillRect(px + (hash % 13), py + 5 + (hash % 9), 3, 1);
   } else {
-    context.fillStyle = "#78945d";
+    context.fillStyle = terrain === "earth" ? "#9f844d" : "#638550";
     if (hash % 7 === 0) {
       context.fillRect(px + 4, py + 12, 1, 4);
       context.fillRect(px + 6, py + 13, 1, 3);
@@ -281,6 +367,9 @@ function drawMatrixCell(context, value, x, y, size, matrix, path, tick) {
       context.fillRect(px + 2, py + 15, 4, 2);
       context.fillStyle = "#b7bdb1";
       context.fillRect(px + 3, py + 14, 2, 1);
+    }
+    if (treeVariant != null && value === 0 && !path) {
+      drawTree(context, px, py, treeVariant, hash);
     }
   }
   if (value === 1) {
@@ -320,6 +409,40 @@ function drawMatrixCell(context, value, x, y, size, matrix, path, tick) {
     if (x === 0 || matrix[y][x - 1] !== 3) context.fillRect(px, py, 2, size);
     if (y === matrix.length - 1 || matrix[y + 1][x] !== 3) context.fillRect(px, py + size - 1, size, 1);
     if (x === matrix[y].length - 1 || matrix[y][x + 1] !== 3) context.fillRect(px + size - 1, py, 1, size);
+  }
+}
+
+function drawTree(context, px, py, variant, hash) {
+  const lean = hash % 2;
+  context.fillStyle = "rgba(40,55,35,.18)";
+  context.fillRect(px + 4, py + 16, 13, 2);
+  context.fillStyle = "#755337";
+  context.fillRect(px + 9 + lean, py + 10, 3, 7);
+  if (variant === 1) {
+    context.fillStyle = "#2f5938";
+    context.fillRect(px + 8, py + 2, 5, 3);
+    context.fillRect(px + 6, py + 5, 9, 4);
+    context.fillRect(px + 4, py + 9, 13, 4);
+    context.fillStyle = "#4f7d46";
+    context.fillRect(px + 9, py + 3, 3, 7);
+  } else if (variant === 2) {
+    context.fillStyle = "#416e3f";
+    context.fillRect(px + 4 + lean, py + 6, 13, 6);
+    context.fillRect(px + 7 + lean, py + 3, 8, 11);
+    context.fillStyle = "#65944f";
+    context.fillRect(px + 5 + lean, py + 6, 5, 3);
+    context.fillRect(px + 10 + lean, py + 4, 4, 3);
+    context.fillStyle = "#d9a94e";
+    context.fillRect(px + 14 + lean, py + 8, 1, 1);
+  } else {
+    context.fillStyle = "#315f3a";
+    context.fillRect(px + 4 + lean, py + 5, 12, 7);
+    context.fillRect(px + 7 + lean, py + 2, 8, 12);
+    context.fillStyle = "#4f7f43";
+    context.fillRect(px + 6 + lean, py + 3, 7, 4);
+    context.fillRect(px + 4 + lean, py + 7, 4, 3);
+    context.fillStyle = "#78a05b";
+    context.fillRect(px + 8 + lean, py + 3, 3, 2);
   }
 }
 
@@ -367,57 +490,86 @@ function spriteOffset(id, detailed) {
 function drawPixelHuman(context, agent, px, py, frame, detailed) {
   const torso = agent.sex === "F" ? "#d95f91" : "#3f82bd";
   const dark = agent.sex === "F" ? "#8d3e69" : "#285b89";
+  const hair = agent.sex === "F" ? "#65372f" : "#49342d";
   context.fillStyle = "rgba(49,37,27,.22)";
-  context.fillRect(px + 4, py + 17, 12, 2);
+  context.fillRect(px + 3, py + 18, 14, 2);
+  context.fillStyle = "#3a2c28";
+  context.fillRect(px + 6, py + 2, 9, 7);
   context.fillStyle = "#efad73";
-  context.fillRect(px + 7, py + 3, 7, 6);
-  context.fillStyle = "#6d392d";
+  context.fillRect(px + 7, py + 3, 7, 5);
+  context.fillStyle = hair;
   context.fillRect(px + 7, py + 2, 7, 3);
   if (agent.sex === "F") {
     context.fillRect(px + 6, py + 4, 2, 6);
-    context.fillRect(px + 13, py + 4, 2, 5);
+    context.fillRect(px + 14, py + 4, 2, 6);
   } else if (detailed) {
-    context.fillRect(px + 9, py + 1, 4, 1);
+    context.fillRect(px + 8, py + 1, 6, 2);
   }
   context.fillStyle = "#3d2925";
   context.fillRect(px + 9, py + 6, 1, 1);
   context.fillRect(px + 12, py + 6, 1, 1);
+  context.fillStyle = "#f6c18b";
+  context.fillRect(px + 8, py + 4, 2, 1);
+  context.fillStyle = "#302a29";
+  context.fillRect(px + 6, py + 9, 9, 7);
+  context.fillRect(px + 3, py + 10 + frame, 4, 3);
+  context.fillRect(px + 14, py + 10 + (1 - frame), 4, 3);
   context.fillStyle = torso;
   context.fillRect(px + 7, py + 9, 7, 6);
-  context.fillRect(px + 4, py + 10 + frame, 3, 2);
-  context.fillRect(px + 14, py + 10 + (1 - frame), 3, 2);
+  context.fillRect(px + 4, py + 11 + frame, 3, 1);
+  context.fillRect(px + 14, py + 11 + (1 - frame), 3, 1);
+  context.fillStyle = "#f2b27d";
+  context.fillRect(px + 3, py + 12 + frame, 2, 2);
+  context.fillRect(px + 17, py + 12 + (1 - frame), 2, 2);
+  context.fillStyle = agent.sex === "F" ? "#f08ab2" : "#6aa6d7";
+  context.fillRect(px + 8, py + 10, 2, 4);
   context.fillStyle = dark;
   context.fillRect(px + 7 + frame, py + 15, 3, 3);
   context.fillRect(px + 11 - frame, py + 15, 3, 3);
+  context.fillStyle = "#302a2a";
+  context.fillRect(px + 6 + frame, py + 18, 4, 1);
+  context.fillRect(px + 11 - frame, py + 18, 4, 1);
   context.fillStyle = "#e7d7ae";
-  context.fillRect(px + 8, py + 10, 1, 4);
+  context.fillRect(px + 11, py + 9, 1, 2);
 }
 
 function drawPixelAnimal(context, agent, px, py, frame, detailed) {
   context.fillStyle = "rgba(43,44,29,.22)";
-  context.fillRect(px + 2, py + 16, 16, 2);
+  context.fillRect(px + 1, py + 17, 18, 2);
   if (agent.predator) {
+    context.fillStyle = "#412e2d";
+    context.fillRect(px + 3, py + 7, 13, 9);
+    context.fillRect(px + 13, py + 5, 6, 9);
+    context.fillRect(px + 1, py + 5, 5, 4);
+    context.fillRect(px, py + 3, 3, 4);
+    context.fillRect(px + 14, py + 2, 3, 5);
+    context.fillRect(px + 17, py + 3, 2, 4);
     context.fillStyle = "#87453e";
     context.fillRect(px + 4, py + 8, 11, 7);
-    context.fillRect(px + 13, py + 6, 6, 7);
-    context.fillRect(px + 1, py + 7, 5, 3);
-    context.fillStyle = "#5d302f";
-    context.fillRect(px + 14, py + 3, 2, 4);
-    context.fillRect(px + 17, py + 4, 2, 3);
+    context.fillRect(px + 14, py + 6, 5, 7);
+    context.fillRect(px + 1, py + 6, 5, 2);
+    context.fillStyle = "#a95b4b";
+    context.fillRect(px + 6, py + 8, 7, 3);
+    context.fillStyle = "#5a3331";
     context.fillRect(px + 5 + frame, py + 14, 2, 4);
     context.fillRect(px + 13 - frame, py + 14, 2, 4);
-    context.fillStyle = "#d78859";
-    context.fillRect(px + 7, py + 9, 5, 2);
+    context.fillRect(px + 18, py + 9, 2, 3);
+    context.fillStyle = "#f2b24f";
+    context.fillRect(px + 16, py + 8, 2, 1);
     context.fillStyle = "#fff0c7";
-    context.fillRect(px + 17, py + 9, 2, 1);
-    if (detailed) context.fillRect(px + 16, py + 12, 1, 2);
+    if (detailed) context.fillRect(px + 17, py + 12, 2, 1);
   } else {
+    context.fillStyle = "#4d3b2c";
+    context.fillRect(px + 3, py + 8, 13, 8);
+    context.fillRect(px + 13, py + 6, 6, 8);
+    context.fillRect(px + 14, py + 3, 2, 4);
+    context.fillRect(px + 17, py + 4, 2, 4);
     context.fillStyle = "#9b713f";
     context.fillRect(px + 4, py + 9, 11, 6);
     context.fillRect(px + 13, py + 7, 5, 6);
-    context.fillStyle = "#6b4c31";
-    context.fillRect(px + 14, py + 3, 2, 5);
-    context.fillRect(px + 17, py + 4, 2, 4);
+    context.fillStyle = "#c09355";
+    context.fillRect(px + 6, py + 9, 7, 3);
+    context.fillStyle = "#684b31";
     context.fillRect(px + 5 + frame, py + 14, 2, 4);
     context.fillRect(px + 12 - frame, py + 14, 2, 4);
     context.fillStyle = "#d7b36c";
@@ -425,6 +577,11 @@ function drawPixelAnimal(context, agent, px, py, frame, detailed) {
     context.fillStyle = "#f7f1ce";
     context.fillRect(px + 16, py + 8, 1, 1);
     context.fillRect(px + 3, py + 9, 2, 2);
+    if (detailed) {
+      context.fillStyle = "#d9c18d";
+      context.fillRect(px + 15, py + 4, 1, 2);
+      context.fillRect(px + 18, py + 5, 1, 2);
+    }
   }
   context.fillStyle = agent.sex === "F" ? "#e578a4" : "#65a5d7";
   context.fillRect(px + 13, py + 12, 3, 1);
@@ -473,6 +630,11 @@ function drawActionEffect(context, agent, px, py, tick) {
     context.fillRect(px + 1, py + 12, 5, 4);
     context.fillStyle = "#72a84f";
     context.fillRect(px + 2, py + 10, 3, 3);
+  } else if (agent.action === "BUILD") {
+    context.fillStyle = "#755033";
+    context.fillRect(px + 16, py + 4, 2, 8);
+    context.fillStyle = "#8e9897";
+    context.fillRect(px + 13, py + 3, 7, 3);
   } else if (agent.action === "EAT") {
     context.fillStyle = "#e1b949";
     context.fillRect(px + 15, py + 7, 2, 2);
@@ -494,6 +656,11 @@ function drawAgentMarkers(context, agent, px, py, tick, selected) {
     context.fillRect(px + 1, py + 3, 6, 5);
     context.fillStyle = "#82b552";
     context.fillRect(px + 2, py + 1, 4, 4);
+  }
+  if (agent.carried_wood > 0) {
+    context.fillStyle = "#70492f";
+    context.fillRect(px + 14, py + 1, 6, 2);
+    context.fillRect(px + 15, py + 4, 5, 2);
   }
   if (agent.pregnancy_ticks_remaining > 0) {
     context.fillStyle = "#f2ca5b";
@@ -709,6 +876,7 @@ function renderRpgProfile(agent) {
     ["Edad", `${agent.steps_survived} ticks`],
     ...(agent.type === "human" ? [["Hijos", agent.children_born || 0]] : []),
     ...(agent.carried_food > 0 ? [["Carga", `${agent.carried_food} comida`]] : []),
+    ...(agent.carried_wood > 0 ? [["Material", `${agent.carried_wood} madera`]] : []),
     ...(agent.heart_ticks_remaining > 0 ? [["Corazón", `${agent.heart_ticks_remaining} ticks`]] : []),
     ...(agent.pregnancy_ticks_remaining > 0 ? [["Embarazo", `${agent.pregnancy_ticks_remaining} ticks`]] : []),
     ...(agent.dependent_ids?.length ? [["Bebés", agent.dependent_ids.length]] : []),
@@ -742,7 +910,7 @@ function actionLabel(action) {
     MOVE_UP: "Moverse arriba", MOVE_DOWN: "Moverse abajo",
     MOVE_LEFT: "Moverse a la izquierda", MOVE_RIGHT: "Moverse a la derecha",
     EAT: "Comer", DRINK: "Beber", REST: "Descansar", WAIT: "Esperar",
-    ATTACK: "Atacar", GATHER: "Recolectar", MATE: "Aparearse",
+    ATTACK: "Atacar", GATHER: "Recolectar", MATE: "Aparearse", BUILD: "Construir",
     FOLLOW_MOTHER: "Seguir a su madre", WAITING: "Esperando", DEAD: "Muerto",
   })[action] || "Sin historial";
 }
@@ -851,7 +1019,7 @@ function drawBrainNetwork(view, viewKey) {
   const previousAverage = previous ? Object.values(previous).reduce((sum, value) => sum + value, 0) / Math.max(1, Object.values(previous).length) : null;
   const delta = previousAverage == null ? null : averageWeight - previousAverage;
   previousWeightMeans.set(viewKey, currentMeans);
-  ui["brain-network-caption"].textContent = `Las dos rutas leen necesidades y mundo social por separado; Fusión reúne ambas antes de producir once Q-values. Acción actual: ${actionLabel(view.action)}. Fuerza media de pesos ${format(averageWeight, 5)}${delta == null ? "" : ` · cambio ${signed(delta, 7)}`}.`;
+  ui["brain-network-caption"].textContent = `Las dos rutas leen necesidades y mundo social por separado; Fusión reúne ambas antes de producir doce Q-values. Acción actual: ${actionLabel(view.action)}. Fuerza media de pesos ${format(averageWeight, 5)}${delta == null ? "" : ` · cambio ${signed(delta, 7)}`}.`;
 }
 
 function drawStageCard(context, card, title, detail) {
@@ -906,10 +1074,10 @@ function drawActionCard(context, card, view) {
   const extent = Math.max(.001, ...values.map(value => Math.abs(Number(value || 0))));
   ACTIONS.forEach((action, index) => {
     const value = Number(values[index] || 0);
-    const y = card.y + 66 + index * 27;
+    const y = card.y + 66 + index * 22;
     const chosen = action === view.action;
     if (chosen) {
-      roundedRectPath(context, card.x + 10, y - 15, card.w - 20, 23, 6);
+      roundedRectPath(context, card.x + 10, y - 13, card.w - 20, 19, 6);
       context.fillStyle = "#fff0dc";
       context.fill();
     }

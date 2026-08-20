@@ -31,9 +31,13 @@ class ActionResult:
     killed: bool = False
     target_id: str | None = None
     gathered: bool = False
+    gathered_wood: bool = False
     deposited: bool = False
     fed_baby: bool = False
     mated: bool = False
+    built: bool = False
+    house_completed: bool = False
+    sheltered: bool = False
 
 
 @dataclass
@@ -46,6 +50,27 @@ class Stockpile:
     @property
     def position(self) -> tuple[int, int]:
         return self.x, self.y
+
+
+@dataclass
+class GroupHouse:
+    agent_type: str
+    x: int
+    y: int
+    required_materials: int
+    materials: int = 0
+
+    @property
+    def position(self) -> tuple[int, int]:
+        return self.x, self.y
+
+    @property
+    def complete(self) -> bool:
+        return self.materials >= self.required_materials
+
+    @property
+    def progress(self) -> float:
+        return min(1.0, self.materials / max(1, self.required_materials))
 
 
 @dataclass(frozen=True)
@@ -66,8 +91,11 @@ class World:
         self.food: set[tuple[int, int]] = set()
         self.water: set[tuple[int, int]] = set()
         self.obstacles: set[tuple[int, int]] = set()
+        self.terrain = self._generate_terrain()
+        self.trees: dict[tuple[int, int], int] = {}
         self.agents: list[BaseAgent] = []
         self.stockpiles: dict[str, Stockpile] = {}
+        self.houses: dict[str, GroupHouse] = {}
         self._distance_map_cache: dict[
             tuple[int, int], dict[tuple[int, int], int]
         ] = {}
@@ -103,10 +131,89 @@ class World:
             x, y = self._empty_position()
             self.agents.append(Animal.create(f"animal_{index:03d}", x, y, self.config))
         self.initialize_stockpiles()
+        self._populate_decorative_trees()
+
+    def _visual_random(self, salt: int) -> random.Random:
+        """Create a seeded visual RNG without changing simulation randomness."""
+        state = random.getstate()
+        seed = random.getrandbits(64)
+        random.setstate(state)
+        return random.Random(seed ^ (self.width << 16) ^ self.height ^ salt)
+
+    def _generate_terrain(self) -> list[list[str]]:
+        """Build contiguous visual regions prepared for future biome rules."""
+        visual_random = self._visual_random(0xB10E)
+        kinds = ("grassland", "earth", "forest")
+        seed_count = max(3, min(9, (self.width * self.height) // 280 + 3))
+        biome_seeds = [
+            (
+                visual_random.randrange(self.width),
+                visual_random.randrange(self.height),
+                kinds[index % len(kinds)],
+            )
+            for index in range(seed_count)
+        ]
+        terrain = []
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                _, _, kind = min(
+                    biome_seeds,
+                    key=lambda seed: (
+                        (x - seed[0]) ** 2
+                        + (y - seed[1]) ** 2
+                        + 2.5 * math.sin((x + seed[0]) * 0.31)
+                        + 2.5 * math.cos((y + seed[1]) * 0.37)
+                    ),
+                )
+                row.append(kind)
+            terrain.append(row)
+
+        # Majority smoothing removes isolated pixels while retaining organic edges.
+        for _ in range(2):
+            smoothed = [row.copy() for row in terrain]
+            for y in range(self.height):
+                for x in range(self.width):
+                    neighbours = [
+                        terrain[ny][nx]
+                        for nx, ny in (
+                            (x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)
+                        )
+                        if self.in_bounds(nx, ny)
+                    ]
+                    majority = max(kinds, key=neighbours.count)
+                    if neighbours.count(majority) >= 3:
+                        smoothed[y][x] = majority
+            terrain = smoothed
+        return terrain
+
+    def _populate_decorative_trees(self) -> None:
+        """Place varied, harvestable trees in clustered forest regions."""
+        visual_random = self._visual_random(0x7AEE)
+        occupied = self.food | self.water | self.obstacles | {
+            (agent.x, agent.y) for agent in self.agents
+        } | {stockpile.position for stockpile in self.stockpiles.values()}
+        self.trees = {}
+        for y in range(self.height):
+            for x in range(self.width):
+                position = (x, y)
+                if self.terrain[y][x] != "forest" or position in occupied:
+                    continue
+                forest_neighbours = sum(
+                    self.terrain[ny][nx] == "forest"
+                    for nx, ny in (
+                        (x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)
+                    )
+                    if self.in_bounds(nx, ny)
+                )
+                density = 0.08 + forest_neighbours * 0.055
+                if visual_random.random() < density:
+                    self.trees[position] = visual_random.randrange(3)
 
     def initialize_stockpiles(self) -> None:
         """Anchor one communal reserve per species at its first living founder."""
         self.stockpiles = {}
+        self.houses = {}
         for agent_type in ("human", "animal"):
             founder = next(
                 (agent for agent in self.agents if agent.agent_type == agent_type), None
@@ -114,6 +221,12 @@ class World:
             if founder is not None:
                 self.stockpiles[agent_type] = Stockpile(
                     agent_type, founder.x, founder.y
+                )
+                self.houses[agent_type] = GroupHouse(
+                    agent_type,
+                    founder.x,
+                    founder.y,
+                    self.config.house_materials_required,
                 )
 
     def random_empty_positions(self, count: int) -> list[tuple[int, int]]:
@@ -244,9 +357,17 @@ class World:
         dy = 0 if baby.y == mother.y else (1 if mother.y > baby.y else -1)
         candidates = [(baby.x + dx, baby.y), (baby.x, baby.y + dy)]
         for position in candidates:
-            if self.in_bounds(*position) and position not in self.obstacles:
+            if self.is_walkable(position):
                 baby.x, baby.y = position
                 return
+
+    def is_walkable(self, position: tuple[int, int]) -> bool:
+        """Return whether an agent may occupy a terrain cell."""
+        return (
+            self.in_bounds(*position)
+            and position not in self.obstacles
+            and position not in self.water
+        )
 
     def _populate_resource_clusters(
         self,
@@ -393,15 +514,12 @@ class World:
         if action in MOVEMENT_DELTAS:
             dx, dy = MOVEMENT_DELTAS[action]
             new_position = (agent.x + dx, agent.y + dy)
-            if not self.in_bounds(*new_position) or new_position in self.obstacles:
+            if not self.is_walkable(new_position):
                 return ActionResult(action, invalid=True)
             agent.x, agent.y = new_position
             needed = (
                 new_position in self.food
                 and agent.hunger >= self.config.priority_need_threshold
-            ) or (
-                new_position in self.water
-                and agent.thirst >= self.config.priority_need_threshold
             )
             return ActionResult(action, reached_needed_resource=needed)
         if action is Action.EAT:
@@ -450,6 +568,7 @@ class World:
             return ActionResult(
                 action,
                 rested=True,
+                sheltered=self.agent_has_shelter(agent),
                 need="energy",
                 necessity=energy_need if necessary else 0.0,
                 unnecessary_need_action=not necessary,
@@ -494,22 +613,34 @@ class World:
                 return ActionResult(action, deposited=True)
             position = self.resource_position_in_reach(agent, "food")
             if (
-                position is None
+                position is not None
+                and agent.hunger < self.config.gathering_hunger_limit
+                and agent.carried_food < self.config.gather_capacity
+            ):
+                self.food.remove(position)
+                hungry_baby = self.hungry_dependent_in_reach(agent)
+                if hungry_baby is not None:
+                    hungry_baby.hunger = max(
+                        0.0, hungry_baby.hunger - self.config.food_hunger_reduction
+                    )
+                    return ActionResult(
+                        action, gathered=True, fed_baby=True, target_id=hungry_baby.id
+                    )
+                agent.carried_food += 1
+                return ActionResult(action, gathered=True)
+            tree = self.tree_position_in_reach(agent)
+            house = self.house_for(agent)
+            if (
+                tree is None
+                or house is None
+                or house.complete
                 or agent.hunger >= self.config.gathering_hunger_limit
-                or agent.carried_food >= self.config.gather_capacity
+                or agent.carried_wood >= self.config.wood_capacity
             ):
                 return ActionResult(action, invalid=True)
-            self.food.remove(position)
-            hungry_baby = self.hungry_dependent_in_reach(agent)
-            if hungry_baby is not None:
-                hungry_baby.hunger = max(
-                    0.0, hungry_baby.hunger - self.config.food_hunger_reduction
-                )
-                return ActionResult(
-                    action, gathered=True, fed_baby=True, target_id=hungry_baby.id
-                )
-            agent.carried_food += 1
-            return ActionResult(action, gathered=True)
+            del self.trees[tree]
+            agent.carried_wood += 1
+            return ActionResult(action, gathered=True, gathered_wood=True)
         if action is Action.MATE:
             target = self.mate_target_in_reach(agent)
             if target is None:
@@ -521,6 +652,26 @@ class World:
             female.heart_ticks_remaining = self.config.courtship_ticks
             male.heart_ticks_remaining = self.config.courtship_ticks
             return ActionResult(action, mated=True, target_id=target.id)
+        if action is Action.BUILD:
+            house = self.house_for(agent)
+            if (
+                house is None
+                or house.complete
+                or agent.carried_wood <= 0
+                or not self.position_in_reach(agent, house.position)
+            ):
+                return ActionResult(action, invalid=True)
+            contribution = min(
+                agent.carried_wood,
+                house.required_materials - house.materials,
+            )
+            agent.carried_wood -= contribution
+            house.materials += contribution
+            return ActionResult(
+                action,
+                built=True,
+                house_completed=house.complete,
+            )
         return ActionResult(action)
 
     def action_constraints(self, agent: BaseAgent) -> ActionConstraints:
@@ -528,7 +679,7 @@ class World:
         mask = [False for _ in Action]
         for action, (dx, dy) in MOVEMENT_DELTAS.items():
             destination = (agent.x + dx, agent.y + dy)
-            mask[action] = self.in_bounds(*destination) and destination not in self.obstacles
+            mask[action] = self.is_walkable(destination)
         mask[Action.EAT] = self.food_available_in_reach(agent)
         mask[Action.DRINK] = self.resource_in_reach(agent, "water")
         mask[Action.REST] = True
@@ -551,8 +702,24 @@ class World:
             and agent.carried_food < self.config.gather_capacity
             and self.resource_in_reach(agent, "food")
         )
-        mask[Action.GATHER] = can_feed_baby or can_deposit or can_collect
+        house = self.house_for(agent)
+        can_collect_wood = (
+            agent.hunger < self.config.gathering_hunger_limit
+            and agent.carried_wood < self.config.wood_capacity
+            and house is not None
+            and not house.complete
+            and self.tree_in_reach(agent)
+        )
+        mask[Action.GATHER] = (
+            can_feed_baby or can_deposit or can_collect or can_collect_wood
+        )
         mask[Action.MATE] = self.mate_target_in_reach(agent) is not None
+        mask[Action.BUILD] = (
+            agent.carried_wood > 0
+            and house is not None
+            and not house.complete
+            and self.position_in_reach(agent, house.position)
+        )
 
         needs = {
             "food": agent.hunger,
@@ -678,8 +845,7 @@ class World:
             for dx, dy in MOVEMENT_DELTAS.values():
                 neighbour = (x + dx, y + dy)
                 if (
-                    self.in_bounds(*neighbour)
-                    and neighbour not in self.obstacles
+                    (self.is_walkable(neighbour) or neighbour == target)
                     and neighbour not in distances
                 ):
                     distances[neighbour] = distances[(x, y)] + 1
@@ -708,6 +874,48 @@ class World:
 
     def stockpile_for(self, agent: BaseAgent) -> Stockpile | None:
         return self.stockpiles.get(agent.agent_type)
+
+    def house_for(self, agent: BaseAgent) -> GroupHouse | None:
+        return self.houses.get(agent.agent_type)
+
+    def tree_position_in_reach(self, agent: BaseAgent) -> tuple[int, int] | None:
+        candidates = (
+            (agent.x, agent.y),
+            (agent.x, agent.y - 1),
+            (agent.x, agent.y + 1),
+            (agent.x - 1, agent.y),
+            (agent.x + 1, agent.y),
+        )
+        return next((position for position in candidates if position in self.trees), None)
+
+    def tree_in_reach(self, agent: BaseAgent) -> bool:
+        return self.tree_position_in_reach(agent) is not None
+
+    def nearest_tree_position(self, agent: BaseAgent) -> tuple[int, int] | None:
+        if not self.trees:
+            return None
+        return min(
+            self.trees,
+            key=lambda position: self.manhattan_distance(
+                (agent.x, agent.y), position
+            ),
+        )
+
+    def construction_target(self, agent: BaseAgent) -> tuple[int, int] | None:
+        house = self.house_for(agent)
+        if house is None or house.complete:
+            return None
+        if agent.carried_wood > 0:
+            return house.position
+        return self.nearest_tree_position(agent)
+
+    def agent_has_shelter(self, agent: BaseAgent) -> bool:
+        house = self.house_for(agent)
+        return bool(
+            house is not None
+            and house.complete
+            and self.position_in_reach(agent, house.position)
+        )
 
     def position_in_reach(
         self, agent: BaseAgent, position: tuple[int, int]
@@ -787,6 +995,11 @@ class World:
             for other in self.living_agents
             if other.id != agent.id
             and legal_target(other)
+            and not (
+                agent.agent_type == "animal"
+                and agent.predator
+                and self.agent_has_shelter(other)
+            )
             and self.manhattan_distance((agent.x, agent.y), (other.x, other.y)) <= 1
         ]
         return min(candidates, key=lambda other: other.id, default=None)
@@ -818,7 +1031,7 @@ class World:
         """Blocked/out-of-bounds flags ordered up, down, left, right."""
         neighbours = ((x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y))
         return [
-            float(not self.in_bounds(*position) or position in self.obstacles)
+            float(not self.is_walkable(position))
             for position in neighbours
         ]
 
@@ -857,6 +1070,8 @@ class World:
         for agent in self.agents:
             if not self.in_bounds(agent.x, agent.y):
                 raise RuntimeError(f"Agent {agent.id} escaped the grid at {(agent.x, agent.y)}")
+            if (agent.x, agent.y) in self.water:
+                raise RuntimeError(f"Agent {agent.id} entered water at {(agent.x, agent.y)}")
         if self.obstacles & self.food or self.obstacles & self.water:
             raise RuntimeError("A resource overlaps an obstacle")
 

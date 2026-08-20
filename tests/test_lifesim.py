@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 import math
 from pathlib import Path
+import random
 
 import torch
 import pytest
@@ -161,6 +162,114 @@ def test_gathering_is_available_only_while_hunger_is_below_limit() -> None:
     world.food.add((3, 2))
     human.hunger = config.gathering_hunger_limit
     assert not world.action_constraints(human).mask[Action.GATHER]
+
+
+def test_agents_gather_wood_and_build_one_shared_house() -> None:
+    config = small_config()
+    config.house_materials_required = 2
+    world = World(config, populate=False)
+    first = Human.create("human_001", 2, 2, config)
+    second = Human.create("human_002", 2, 2, config)
+    world.agents = [first, second]
+    world.initialize_stockpiles()
+    house = world.houses["human"]
+
+    world.trees[(3, 2)] = 0
+    assert world.action_constraints(first).mask[Action.GATHER]
+    gathered = world.execute_action(first, Action.GATHER)
+    assert gathered.gathered and gathered.gathered_wood
+    assert first.carried_wood == 1
+    assert (3, 2) not in world.trees
+    assert world.action_constraints(first).mask[Action.BUILD]
+    built = world.execute_action(first, Action.BUILD)
+    assert built.built and not built.house_completed
+    assert house.materials == 1
+
+    world.trees[(2, 3)] = 1
+    world.execute_action(second, Action.GATHER)
+    completed = world.execute_action(second, Action.BUILD)
+    assert completed.built and completed.house_completed
+    assert world.house_for(first) is world.house_for(second) is house
+    assert house.complete
+    assert world.agent_has_shelter(first)
+    assert not world.action_constraints(first).mask[Action.BUILD]
+
+
+def test_group_house_improves_rest_for_every_member() -> None:
+    config = small_config()
+    config.house_materials_required = 1
+    world = World(config, populate=False)
+    builder = Human.create("human_001", 2, 2, config)
+    neighbour = Human.create("human_002", 2, 2, config)
+    world.agents = [builder, neighbour]
+    world.initialize_stockpiles()
+    builder.carried_wood = 1
+    assert world.execute_action(builder, Action.BUILD).house_completed
+
+    neighbour.energy = 0.20
+    neighbour.update_biology(
+        shelter_energy_gain=config.house_passive_energy_gain,
+    )
+    assert neighbour.energy == pytest.approx(
+        0.20 - config.energy_per_tick + config.house_passive_energy_gain
+    )
+
+    neighbour.energy = 0.20
+    result = world.execute_action(neighbour, Action.REST)
+    assert result.sheltered
+    neighbour.update_biology(
+        rested=True,
+        rest_multiplier=config.house_rest_multiplier,
+        shelter_energy_gain=config.house_passive_energy_gain,
+    )
+    assert neighbour.energy == pytest.approx(
+        0.20
+        + config.rest_energy_gain * config.house_rest_multiplier
+        + config.house_passive_energy_gain
+    )
+
+
+def test_group_house_protects_occupants_from_predators() -> None:
+    config = small_config()
+    config.house_materials_required = 1
+    world = World(config, populate=False)
+    predator = Animal.create("animal_001", 2, 2, config)
+    protected = Human.create("human_001", 3, 2, config)
+    world.agents = [predator, protected]
+    world.initialize_stockpiles()
+    world.houses["human"].materials = 1
+
+    assert world.agent_has_shelter(protected)
+    assert world.attack_target_in_reach(predator) is None
+    assert not world.action_constraints(predator).mask[Action.ATTACK]
+    assert world.execute_action(predator, Action.ATTACK).invalid
+
+    outsider = Human.create("human_002", 1, 2, config)
+    world.agents.append(outsider)
+    assert not world.agent_has_shelter(outsider)
+    assert world.attack_target_in_reach(predator) is outsider
+
+
+def test_construction_rewards_are_explicit_and_inspectable() -> None:
+    reward = calculate_reward(
+        ate=False,
+        drank=False,
+        invalid=False,
+        reached_needed_resource=False,
+        health_delta=0.0,
+        died=False,
+        repeating=False,
+        wood_gather_reward=0.20,
+        house_build_reward=0.35,
+        house_completion_reward=1.50,
+        construction_progress=0.08,
+        sheltered_rest_reward=0.30,
+    )
+    assert reward.components["gathered_wood"] == 0.20
+    assert reward.components["built_group_house"] == 0.35
+    assert reward.components["completed_group_house"] == 1.50
+    assert reward.components["construction_progress"] == 0.08
+    assert reward.components["rested_in_group_house"] == 0.30
 
 
 def test_gathering_progress_has_dense_directional_reward() -> None:
@@ -379,6 +488,34 @@ def test_agent_can_move() -> None:
     result = world.execute_action(agent, Action.MOVE_RIGHT)
     assert not result.invalid
     assert (agent.x, agent.y) == (3, 2)
+
+
+def test_water_is_impassable_for_movement_and_action_mask() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    agent = Human.create("human_001", 2, 2, config)
+    world.agents = [agent]
+    world.water.add((3, 2))
+
+    constraints = world.action_constraints(agent)
+    result = world.execute_action(agent, Action.MOVE_RIGHT)
+
+    assert not constraints.mask[Action.MOVE_RIGHT]
+    assert constraints.mask[Action.DRINK]
+    assert result.invalid
+    assert (agent.x, agent.y) == (2, 2)
+    assert world.cardinal_obstacle_flags(2, 2) == [0.0, 0.0, 0.0, 1.0]
+
+
+def test_shortest_route_goes_around_water() -> None:
+    config = small_config()
+    world = World(config, populate=False)
+    world.water.add((2, 1))
+
+    actions = world._shortest_route_actions((1, 1), (3, 1))
+
+    assert Action.MOVE_RIGHT not in actions
+    assert set(actions) == {Action.MOVE_UP, Action.MOVE_DOWN}
 
 
 def test_action_mask_removes_physically_impossible_actions() -> None:
@@ -665,6 +802,33 @@ def test_consumed_food_remains_scarce_until_respawn_succeeds() -> None:
 def test_default_world_uses_dense_matrix() -> None:
     config = SimulationConfig()
     assert (config.grid_width, config.grid_height) == (60, 40)
+
+
+def test_visual_biomes_form_regions_and_trees_form_forests() -> None:
+    random_state = random.getstate()
+    random.seed(42)
+    try:
+        world = World(SimulationConfig(), populate=False)
+        world._populate_decorative_trees()
+    finally:
+        random.setstate(random_state)
+
+    terrain_kinds = {cell for row in world.terrain for cell in row}
+    matching_neighbours = 0
+    neighbour_pairs = 0
+    for y, row in enumerate(world.terrain):
+        for x, terrain in enumerate(row):
+            for nx, ny in ((x + 1, y), (x, y + 1)):
+                if nx >= world.width or ny >= world.height:
+                    continue
+                neighbour_pairs += 1
+                matching_neighbours += world.terrain[ny][nx] == terrain
+
+    assert terrain_kinds == {"grassland", "earth", "forest"}
+    assert matching_neighbours / neighbour_pairs > 0.85
+    assert len(world.trees) > 20
+    assert set(world.trees.values()) == {0, 1, 2}
+    assert all(world.terrain[y][x] == "forest" for x, y in world.trees)
 
 
 def test_resource_progress_adds_dense_reward() -> None:
@@ -1016,6 +1180,15 @@ def test_web_controller_exposes_json_safe_brain_state(tmp_path: Path) -> None:
         assert first_agent["brain_activations"]["fusion_hidden"]
         assert first_agent["weight_statistics"]
         assert first_agent["spatial_memory"].keys() == {"food", "water"}
+        assert len(state["grid"]["terrain"]) == config.grid_height
+        assert all(tree["variant"] in {0, 1, 2} for tree in state["grid"]["trees"])
+        assert len(state["grid"]["houses"]) == 2
+        assert all(
+            house["required_materials"] == config.house_materials_required
+            for house in state["grid"]["houses"]
+        )
+        assert "carried_wood" in first_agent
+        assert state["summary"]["wood_remaining"] == len(state["grid"]["trees"])
         json.dumps(state, allow_nan=False)
     finally:
         controller.close()
@@ -1418,6 +1591,23 @@ def test_brain_migration_can_add_attack_output_without_changing_old_outputs() ->
     _load_widened_state_dict(new_brain, old_brain.state_dict())
     actual = new_brain(probe).detach()
     assert torch.allclose(expected, actual[:, :8], atol=1e-7, rtol=1e-6)
+
+
+def test_house_inputs_and_build_action_preserve_previous_brain_outputs() -> None:
+    old_brain = AgentBrain(
+        input_size=44, hidden_sizes=[16, 32, 32], output_size=11,
+        need_input_size=15,
+    )
+    new_brain = AgentBrain(
+        input_size=Human.INPUT_SIZE, hidden_sizes=[16, 32, 32],
+        output_size=len(Action), need_input_size=Human.NEED_INPUT_SIZE,
+    )
+    old_input = torch.randn(1, 44)
+    expected = old_brain(old_input).detach()
+    _load_widened_state_dict(new_brain, old_brain.state_dict())
+    migrated_input = torch.nn.functional.pad(old_input, (0, Human.INPUT_SIZE - 44))
+    actual = new_brain(migrated_input).detach()
+    assert torch.allclose(expected, actual[:, :11], atol=1e-7, rtol=1e-6)
 
 
 def test_brain_migration_can_insert_survival_inputs_before_spatial_branch() -> None:

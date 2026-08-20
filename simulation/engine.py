@@ -104,7 +104,12 @@ class SimulationEngine:
             if not agent.alive:
                 continue
             if agent.dependent_ticks_remaining > 0:
-                health_delta, died = agent.update_biology()
+                sheltered = self.world.agent_has_shelter(agent)
+                health_delta, died = agent.update_biology(
+                    shelter_energy_gain=(
+                        self.config.house_passive_energy_gain if sheltered else 0.0
+                    )
+                )
                 if (
                     died
                     and agent.mother_id
@@ -163,6 +168,13 @@ class SimulationEngine:
                 if agent.carried_food > 0 and stockpile is not None
                 else None
             )
+            construction_target = self.world.construction_target(agent)
+            construction_distance_before = (
+                self.world.manhattan_distance(
+                    (agent.x, agent.y), construction_target
+                )
+                if construction_target is not None else None
+            )
             distance_before = (
                 self.world.manhattan_distance((agent.x, agent.y), remembered_target)
                 if remembered_target is not None
@@ -190,6 +202,7 @@ class SimulationEngine:
             )
             resource_progress = 0.0
             gathering_progress = 0.0
+            construction_progress = 0.0
             movement_actions = {
                 Action.MOVE_UP,
                 Action.MOVE_DOWN,
@@ -218,6 +231,18 @@ class SimulationEngine:
                     gathering_progress = self.config.gather_progress_reward
                 elif stockpile_distance_after > stockpile_distance_before:
                     gathering_progress = -self.config.gather_regress_penalty
+            if (
+                Action(action_index) in movement_actions
+                and construction_distance_before is not None
+                and construction_target is not None
+            ):
+                construction_distance_after = self.world.manhattan_distance(
+                    (agent.x, agent.y), construction_target
+                )
+                if construction_distance_after < construction_distance_before:
+                    construction_progress = self.config.construction_progress_reward
+                elif construction_distance_after > construction_distance_before:
+                    construction_progress = -self.config.construction_regress_penalty
             survival_priority_penalty = calculate_survival_priority_penalty(
                 action_name=action_name,
                 hunger=hunger_before,
@@ -232,7 +257,17 @@ class SimulationEngine:
                 resource_progress=resource_progress,
             )
             agent.note_position()
-            health_delta, died = agent.update_biology(rested=action_result.rested)
+            health_delta, died = agent.update_biology(
+                rested=action_result.rested,
+                rest_multiplier=(
+                    self.config.house_rest_multiplier
+                    if action_result.sheltered else 1.0
+                ),
+                shelter_energy_gain=(
+                    self.config.house_passive_energy_gain
+                    if self.world.agent_has_shelter(agent) else 0.0
+                ),
+            )
             need_safety_signal = calculate_need_safety_signal(
                 hunger_before=hunger_before,
                 thirst_before=thirst_before,
@@ -275,7 +310,9 @@ class SimulationEngine:
                     self.config.predator_kill_reward if action_result.killed else 0.0
                 ),
                 gather_reward=(
-                    self.config.gather_pickup_reward if action_result.gathered else 0.0
+                    self.config.gather_pickup_reward
+                    if action_result.gathered and not action_result.gathered_wood
+                    else 0.0
                 ),
                 deposit_reward=(
                     self.config.gather_deposit_reward if action_result.deposited else 0.0
@@ -288,6 +325,23 @@ class SimulationEngine:
                 maternal_care_penalty=maternal_care_penalty,
                 baby_starvation_penalty=maternal_starvation_penalties.get(
                     agent.id, 0.0
+                ),
+                wood_gather_reward=(
+                    self.config.wood_gather_reward
+                    if action_result.gathered_wood else 0.0
+                ),
+                house_build_reward=(
+                    self.config.house_build_reward if action_result.built else 0.0
+                ),
+                house_completion_reward=(
+                    self.config.house_completion_reward
+                    if action_result.house_completed else 0.0
+                ),
+                construction_progress=construction_progress,
+                sheltered_rest_reward=(
+                    self.config.sheltered_rest_reward
+                    if action_result.sheltered and action_result.necessity > 0.0
+                    else 0.0
                 ),
             )
             agent.total_reward += reward_result.total
@@ -449,6 +503,10 @@ class SimulationEngine:
             "average_loss": None,
             "food_remaining": self.world.total_food_supply,
             "water_remaining": len(self.world.water),
+            "wood_remaining": len(self.world.trees),
+            "houses_completed": sum(
+                house.complete for house in self.world.houses.values()
+            ),
             "deaths": 0,
         }
         agents = []
@@ -465,6 +523,7 @@ class SimulationEngine:
                 "alive": agent.alive,
                 "cause_of_death": agent.cause_of_death,
                 "carried_food": agent.carried_food,
+                "carried_wood": agent.carried_wood,
                 "heart_partner_id": agent.heart_partner_id,
                 "heart_ticks_remaining": agent.heart_ticks_remaining,
                 "pregnant_by_id": agent.pregnant_by_id,
@@ -553,6 +612,11 @@ class SimulationEngine:
             "grid": {
                 "width": self.world.width,
                 "height": self.world.height,
+                "terrain": self.world.terrain,
+                "trees": [
+                    {"x": x, "y": y, "variant": variant}
+                    for (x, y), variant in sorted(self.world.trees.items())
+                ],
                 "food": [list(position) for position in sorted(self.world.food)],
                 "water": [list(position) for position in sorted(self.world.water)],
                 "obstacles": [list(position) for position in sorted(self.world.obstacles)],
@@ -564,6 +628,18 @@ class SimulationEngine:
                         "food": stockpile.food,
                     }
                     for stockpile in self.world.stockpiles.values()
+                ],
+                "houses": [
+                    {
+                        "type": house.agent_type,
+                        "x": house.x,
+                        "y": house.y,
+                        "materials": house.materials,
+                        "required_materials": house.required_materials,
+                        "progress": house.progress,
+                        "complete": house.complete,
+                    }
+                    for house in self.world.houses.values()
                 ],
             },
             "agents": agents,

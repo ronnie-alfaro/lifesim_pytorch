@@ -13,6 +13,7 @@ class Action(IntEnum):
     ATTACK = 8
     GATHER = 9
     MATE = 10
+    BUILD = 11
 
 
 MOVEMENT_DELTAS: dict[Action, tuple[int, int]] = {

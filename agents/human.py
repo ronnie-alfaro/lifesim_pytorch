@@ -26,6 +26,9 @@ class Human(BaseAgent):
         "reserva al alcance", "pareja al alcance", "corazón activo",
         "embarazo", "cuidando bebés", "hambre máxima bebés",
         "es bebé dependiente",
+        "árbol dx", "árbol dy", "árbol al alcance", "madera cargada",
+        "casa dx", "casa dy", "progreso casa", "casa terminada",
+        "casa al alcance",
     ]
     NEED_INPUT_SIZE = len(NEED_LABELS)
     INPUT_SIZE = NEED_INPUT_SIZE + len(SPATIAL_LABELS)

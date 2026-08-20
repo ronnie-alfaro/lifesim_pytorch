@@ -16,6 +16,9 @@ class AsciiRenderer:
             cells[y][x] = "W"
         for stockpile in world.stockpiles.values():
             cells[stockpile.y][stockpile.x] = "S"
+        for house in world.houses.values():
+            if house.complete:
+                cells[house.y][house.x] = "C"
         for agent in world.living_agents:
             cells[agent.y][agent.x] = "H" if agent.agent_type == "human" else "A"
         return "\n".join("".join(row) for row in cells)

@@ -39,7 +39,7 @@ h2 { font-family: Georgia, serif; font-size: 23px; font-weight: 500; }
 .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: #b8b8b3; }
 .connection-dot.online { background: #3d9a64; box-shadow: 0 0 0 4px rgba(61,154,100,.12); }
 
-main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 auto; }
+main { padding: 22px clamp(14px, 2.5vw, 42px) 48px; max-width: 1920px; margin: 0 auto; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
 .control-deck { display: grid; grid-template-columns: auto minmax(240px, 1fr) auto; gap: 28px; align-items: center; padding: 13px 16px; margin-bottom: 18px; }
 .transport { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -78,9 +78,9 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
 .builder-footer #architecture-preview { color: var(--green); font-weight: 750; }
 .builder-footer #builder-help { max-width: 520px; text-align: right; }
 
-.workspace { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(330px, .75fr); gap: 18px; align-items: start; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 360px); gap: 18px; align-items: start; }
 .world-column, .inspector-column { display: grid; gap: 16px; }
-.world-panel { padding: 20px; overflow: hidden; background: linear-gradient(155deg, #fbfaf6 0%, #f3f1e8 100%); }
+.world-panel { grid-column: 1 / -1; padding: 24px; overflow: hidden; background: linear-gradient(155deg, #fbfaf6 0%, #f3f1e8 100%); }
 .panel-heading, .agent-title, .section-label { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 11px; }
 .legend span { display: flex; align-items: center; gap: 5px; }
@@ -92,12 +92,17 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
 .legend-food { background: #78a84f; border-radius: 50% 3px 50% 3px; }
 .legend-stockpile { background: linear-gradient(#b9854e 0 35%, #6f4c2d 36%); border-radius: 2px; }
 .legend-water { background: linear-gradient(135deg, #287aa8 45%, #83c9df 46% 58%, #287aa8 59%); border-radius: 3px; }
+.legend-tree { background: radial-gradient(circle at 50% 38%, #4f7b3e 0 42%, transparent 44%), linear-gradient(90deg, transparent 42%, #725138 43% 58%, transparent 59%); }
+.legend-house { background: linear-gradient(135deg, transparent 25%, #8f553c 26% 50%, transparent 51%), linear-gradient(#d9c08d 48%, #5d412d 49%); }
+.legend-grass { background: #bfd39b; }
+.legend-earth { background: #ccb277; }
+.legend-forest { background: #86a96f; }
 
 .world {
   display: block;
-  width: 100%;
+  width: 85%;
   aspect-ratio: 3 / 2;
-  margin-top: 16px;
+  margin: 16px auto 0;
   border: 3px solid #665a43;
   border-radius: 12px;
   background-color: #ced8b7;
@@ -106,6 +111,9 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.38), 0 14px 32px rgba(43,53,35,.16), 0 2px 0 #443b2e;
 }
 .world-hint { margin-top: 11px; padding: 8px 10px; color: #59645c; background: rgba(224,229,211,.68); border-radius: 7px; font-size: 10px; line-height: 1.45; }
+.house-status { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.house-status span { padding: 5px 8px; border: 1px solid #d5c6aa; border-radius: 999px; background: #f3e9d5; color: #6d5138; font-size: 9px; font-weight: 750; }
+.house-status span.complete { border-color: #9db69a; background: #e2ecdf; color: #315c3d; }
 
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .metric-card { background: var(--panel); border: 1px solid var(--line); border-radius: 11px; padding: 14px; }
@@ -231,6 +239,8 @@ main { padding: 22px clamp(14px, 3vw, 48px) 48px; max-width: 1600px; margin: 0 a
   .button { padding-inline: 7px; font-size: 11px; }
   .builder-heading { display: grid; }
   .builder-controls { grid-template-columns: 1fr; gap: 12px; }
+  .world-panel { padding: 14px; }
+  .world { width: 100%; }
   .neural-lab-wide { padding: 14px; }
   .neural-lab-heading { display: grid; }
 }

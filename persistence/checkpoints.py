@@ -51,6 +51,7 @@ def save_run_checkpoints(
             "predator": agent.predator,
             "cause_of_death": agent.cause_of_death,
             "carried_food": agent.carried_food,
+            "carried_wood": agent.carried_wood,
             "heart_partner_id": agent.heart_partner_id,
             "heart_ticks_remaining": agent.heart_ticks_remaining,
             "pregnant_by_id": agent.pregnant_by_id,

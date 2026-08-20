@@ -39,6 +39,7 @@ class MetricsRecorder:
                     "alive": agent.alive,
                     "cause_of_death": agent.cause_of_death,
                     "carried_food": agent.carried_food,
+                    "carried_wood": agent.carried_wood,
                     "heart_ticks_remaining": agent.heart_ticks_remaining,
                     "pregnancy_ticks_remaining": agent.pregnancy_ticks_remaining,
                     "mother_id": agent.mother_id,
@@ -112,6 +113,13 @@ class MetricsRecorder:
                     stockpile.food for stockpile in world.stockpiles.values()
                 ),
                 "water_remaining": len(world.water),
+                "wood_remaining": len(world.trees),
+                "houses_completed": sum(
+                    house.complete for house in world.houses.values()
+                ),
+                "house_materials": sum(
+                    house.materials for house in world.houses.values()
+                ),
                 "deaths": sum(not agent.alive for agent in world.agents),
                 "births": max(
                     0,
